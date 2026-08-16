@@ -1,0 +1,26 @@
+@HomeDeck_HostAddress = http://localhost:5080
+
+### Every known light, as last confirmed by the bulbs themselves
+GET {{HomeDeck_HostAddress}}/api/lights
+Accept: application/json
+
+### Force a re-discovery instead of waiting for the poller
+POST {{HomeDeck_HostAddress}}/api/lights/refresh
+
+### Absolute brightness
+POST {{HomeDeck_HostAddress}}/api/lights/444f8eb4a92e/state
+Content-Type: application/json
+
+{ "brightness": 60 }
+
+### Relative nudge — this is what the rotary knob sends
+POST {{HomeDeck_HostAddress}}/api/lights/444f8eb4a92e/state
+Content-Type: application/json
+
+{ "brightnessDelta": -10 }
+
+### Off
+POST {{HomeDeck_HostAddress}}/api/lights/444f8eb4a92e/state
+Content-Type: application/json
+
+{ "isOn": false }
