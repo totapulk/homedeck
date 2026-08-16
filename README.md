@@ -21,7 +21,7 @@ Three ideas hold this together:
 
 1. **The controller is deliberately dumb.** The ESP32 sends `ROTATE ±n` and `PRESS` — nothing
    else. It has no idea what a light, a room or a brightness level is. The app decides what an
-   input *means*; the backend decides what the world *is*. Firmware never needs reflashing when
+   input means, the backend decides what the world is. Firmware never needs reflashing when
    the product changes.
 2. **Relative events, not absolute values.** A rotary encoder emits deltas, so a knob can never
    fight a change made from the phone or the wall switch. (A potentiometer would have been
@@ -66,10 +66,11 @@ $ dotnet run --project backend/tools/WizProbe -- discover
 - [ ] Flutter app: light list, on/off, brightness, colour temperature
 - [ ] ESP32 firmware + BLE controller input → physical knob dims real bulbs
 - [ ] Flutter web build served by the backend; deploy to Raspberry Pi
-- [ ] Tests in CI, demo video
+- [ ] Tests in CI
+- [ ] Dreame robot vacuum integration, possibly a big button to press to activate the robot vacuum
+- [ ] Cupra battery status (no official support on this, needs )
 
-## Why this project exists
 
-It is a portfolio piece, built in a handful of focused evenings, in three stacks that were new
-to me when I started: Flutter, .NET and ESP32 BLE. The build log and the commit history are part
-of the point — a section on the AI-assisted workflow used to get up to speed follows.
+## Why this project
+
+Want to experiment with bluetooth as well as Flutter and .NET. At the same time have a fun all-in-one integration for possible future smart home projects. Also it's nice to have a physical knob/switch, or a dashboard screen to adjust the stuff that normally requires you to reach for your phone to adjust lights etc.
