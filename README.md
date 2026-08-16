@@ -1,5 +1,7 @@
 # HomeDeck
 
+[![CI](https://github.com/totapulk/homedeck/actions/workflows/ci.yml/badge.svg)](https://github.com/totapulk/homedeck/actions/workflows/ci.yml)
+
 A small smart-home control system: a physical rotary knob (ESP32 + BLE) and a Flutter app
 both drive the same lights, through one .NET backend that owns the truth about device state.
 
@@ -66,7 +68,7 @@ $ dotnet run --project backend/tools/WizProbe -- discover
 - [ ] Flutter app: light list, on/off, brightness, colour temperature
 - [ ] ESP32 firmware + BLE controller input → physical knob dims real bulbs
 - [ ] Flutter web build served by the backend; deploy to Raspberry Pi
-- [ ] Tests in CI
+- [x] Unit tests for the pure backend logic, run in CI on every pull request
 - [ ] Dreame robot vacuum integration, possibly a big button to press to activate the robot vacuum
 - [ ] Cupra battery status (no official support on this, needs )
 
