@@ -1,0 +1,42 @@
+# --- Local working notes & scratch (not part of the deliverable) ---
+NOTES.md
+CLAUDE.md
+scratch/
+*.local.md
+*.local.json
+
+# --- .NET ---
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+publish/
+*.user
+*.suo
+.vs/
+artifacts/
+
+# --- Flutter / Dart ---
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+.pub-cache/
+.pub/
+*.iml
+.idea/
+app/android/local.properties
+app/android/.gradle/
+app/ios/Pods/
+app/ios/Flutter/Flutter.podspec
+
+# --- PlatformIO / Arduino (firmware) ---
+firmware/**/.pio/
+firmware/**/.vscode/
+
+# --- Editors / OS ---
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
