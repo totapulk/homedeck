@@ -24,7 +24,11 @@ public sealed class HomeDeckOptions
 /// In-memory on purpose: the bulbs themselves are the durable store, and a restart just
 /// re-discovers them. A database here would be ceremony without a reader.
 /// </remarks>
-public sealed class LightRegistry(IOptions<HomeDeckOptions> options, TimeProvider time)
+/// <remarks>
+/// Naming comes in through IOptionsMonitor rather than IOptions so that renaming a light in
+/// appsettings.json takes effect on the next poll instead of on the next restart.
+/// </remarks>
+public sealed class LightRegistry(IOptionsMonitor<HomeDeckOptions> options, TimeProvider time)
 {
     private readonly ConcurrentDictionary<string, LightState> _lights = new();
 
@@ -39,7 +43,7 @@ public sealed class LightRegistry(IOptions<HomeDeckOptions> options, TimeProvide
     /// <summary>Records confirmed device state and notifies listeners if anything actually moved.</summary>
     public LightState Upsert(LightSnapshot snapshot)
     {
-        var naming = options.Value.Lights.GetValueOrDefault(snapshot.DeviceId);
+        var naming = options.CurrentValue.Lights.GetValueOrDefault(snapshot.DeviceId);
         var updated = new LightState(
             Id: snapshot.DeviceId,
             Name: naming?.Name ?? DefaultName(snapshot.DeviceId),
