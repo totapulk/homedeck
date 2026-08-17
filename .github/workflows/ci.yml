@@ -33,3 +33,30 @@ jobs:
 
       - name: Test
         run: dotnet test backend/HomeDeck.slnx --configuration Release --no-build --verbosity normal
+
+  app:
+    name: App analyze & test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.9'
+          channel: stable
+          cache: true
+
+      - name: Restore
+        run: flutter pub get
+
+      # The analyzer is not decoration here: it is the only thing standing between a typo and
+      # a runtime failure on a device nobody is watching.
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
