@@ -17,7 +17,7 @@ public sealed class LightService(ILightProvider provider, LightRegistry registry
         // briefly unreachable should keep its place in the UI instead of vanishing from it.
         var seen = snapshots.Select(s => s.DeviceId).ToHashSet();
         foreach (var known in registry.All.Where(l => !seen.Contains(l.Id)))
-            registry.MarkUnreachable(known.Id);
+            registry.MarkMissing(known.Id);
 
         return registry.All;
     }

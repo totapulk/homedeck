@@ -5,17 +5,12 @@ using System.Text;
 
 namespace HomeDeck.Api.Lights.Wiz;
 
-/// <summary>
-/// Talks to WiZ bulbs over their local UDP API. All the vendor detail stops here:
-/// callers deal in <see cref="LightSnapshot"/> and <see cref="LightCommand"/>.
-/// </summary>
-/// <remarks>
-/// Device ids are bulb MAC addresses rather than IPs, because DHCP will eventually
-/// hand a bulb a different address and a light's identity should survive that.
-/// </remarks>
 internal sealed class WizLightProvider(ILogger<WizLightProvider> logger) : ILightProvider
 {
-    private static readonly TimeSpan DiscoveryWindow = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan DiscoveryWindow = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan ProbeInterval = TimeSpan.FromMilliseconds(500);
+    private const int Probes = 3;
+
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromMilliseconds(600);
     private const int Attempts = 2; // UDP has no retransmit of its own
 
@@ -24,14 +19,14 @@ internal sealed class WizLightProvider(ILogger<WizLightProvider> logger) : ILigh
     public async Task<IReadOnlyList<LightSnapshot>> DiscoverAsync(CancellationToken ct = default)
     {
         using var udp = new UdpClient { EnableBroadcast = true };
-        var payload = Encoding.UTF8.GetBytes(WizProtocol.GetPilot());
-        await udp.SendAsync(payload, new IPEndPoint(IPAddress.Broadcast, WizProtocol.Port), ct);
 
         // Every bulb on the subnet answers a broadcast getPilot with its own state,
         // so one packet gives us discovery and a full state refresh at the same time.
         var found = new Dictionary<string, LightSnapshot>();
         using var window = CancellationTokenSource.CreateLinkedTokenSource(ct);
         window.CancelAfter(DiscoveryWindow);
+
+        var probing = ProbeAsync(udp, window.Token);
 
         try
         {
@@ -49,8 +44,28 @@ internal sealed class WizLightProvider(ILogger<WizLightProvider> logger) : ILigh
             // Discovery window elapsed — that is the normal way out of the loop.
         }
 
+        await probing;
+
         logger.LogInformation("WiZ discovery found {Count} bulb(s)", found.Count);
         return [.. found.Values];
+    }
+
+    private static async Task ProbeAsync(UdpClient udp, CancellationToken ct)
+    {
+        var payload = Encoding.UTF8.GetBytes(WizProtocol.GetPilot());
+        var broadcast = new IPEndPoint(IPAddress.Broadcast, WizProtocol.Port);
+
+        try
+        {
+            for (var probe = 1; probe <= Probes; probe++)
+            {
+                await udp.SendAsync(payload, broadcast, ct);
+                if (probe < Probes) await Task.Delay(ProbeInterval, ct);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
     }
 
     public async Task<LightSnapshot?> ReadAsync(string deviceId, CancellationToken ct = default)
