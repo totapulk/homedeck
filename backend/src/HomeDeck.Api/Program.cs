@@ -1,5 +1,7 @@
+using System.Text.Json;
 using HomeDeck.Api.Lights;
 using HomeDeck.Api.Lights.Wiz;
+using HomeDeck.Api.Realtime;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,10 +19,20 @@ builder.Services.AddSingleton<LightRegistry>();
 builder.Services.AddSingleton<LightService>();
 builder.Services.AddHostedService<LightPollingService>();
 
+// Real-time push of confirmed state to every connected client.
+builder.Services.AddSignalR()
+    // Spelled out so hub payloads look exactly like the REST ones; a client should not need
+    // two different casing rules for the same LightState.
+    .AddJsonProtocol(o => o.PayloadSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase);
+builder.Services.AddHostedService<LightBroadcaster>();
+
 // The Flutter web build is served from this same origin in production, but during development
 // it runs on its own port — hence a LAN-wide open policy. There is no auth to protect anyway.
+// The origin is reflected rather than answered with "*", because SignalR's browser clients send
+// credentials by default and a wildcard origin makes the browser reject a credentialed request.
 builder.Services.AddCors(o => o.AddDefaultPolicy(p => p
-    .AllowAnyOrigin()
+    .SetIsOriginAllowed(_ => true)
+    .AllowCredentials()
     .AllowAnyHeader()
     .AllowAnyMethod()));
 
@@ -38,5 +50,6 @@ app.UseStaticFiles();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapLightEndpoints();
+app.MapHub<LightHub>("/hubs/lights");
 
 app.Run();
