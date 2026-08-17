@@ -63,8 +63,9 @@ $ dotnet run --project backend/tools/WizProbe -- discover
 ## Roadmap
 
 - [x] WiZ UDP protocol verified from C# (`WizProbe`: discover / get / on / off / dim)
-- [ ] ASP.NET Core API: `GET /api/lights`, `POST /api/lights/{id}/state`, scenes
-- [ ] SignalR hub for real-time state sync to all clients
+- [x] ASP.NET Core API: `GET /api/lights`, `POST /api/lights/{id}/state`, background polling
+- [x] SignalR hub for real-time state sync to all clients
+- [ ] Scenes
 - [ ] Flutter app: light list, on/off, brightness, colour temperature
 - [ ] ESP32 firmware + BLE controller input → physical knob dims real bulbs
 - [ ] Flutter web build served by the backend; deploy to Raspberry Pi
