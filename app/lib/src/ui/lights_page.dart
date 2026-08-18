@@ -33,7 +33,7 @@ class LightsPage extends StatelessWidget {
         LightsReady(:final lights) when lights.isEmpty => const _Empty(),
         LightsReady(:final lights) => RefreshIndicator(
           onRefresh: store.load,
-          child: _RoomList(lights: lights),
+          child: _RoomList(lights: lights, selectedId: store.selected?.id),
         ),
       },
     );
@@ -82,9 +82,10 @@ class _RealtimeBadge extends StatelessWidget {
 }
 
 class _RoomList extends StatelessWidget {
-  const _RoomList({required this.lights});
+  const _RoomList({required this.lights, this.selectedId});
 
   final List<Light> lights;
+  final String? selectedId;
 
   @override
   Widget build(BuildContext context) {
@@ -108,7 +109,7 @@ class _RoomList extends StatelessWidget {
             ),
           ),
           for (final light in roomLights) ...[
-            LightTile(light: light),
+            LightTile(light: light, isSelected: light.id == selectedId),
             const SizedBox(height: 8),
           ],
         ],

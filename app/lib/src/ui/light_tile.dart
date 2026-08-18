@@ -5,9 +5,12 @@ import '../models/light_command.dart';
 import '../state/light_store.dart';
 
 class LightTile extends StatefulWidget {
-  const LightTile({super.key, required this.light});
+  const LightTile({super.key, required this.light, this.isSelected = false});
 
   final Light light;
+
+  /// Whether a physical controller acts on this light.
+  final bool isSelected;
 
   @override
   State<LightTile> createState() => _LightTileState();
@@ -39,59 +42,87 @@ class _LightTileState extends State<LightTile> {
     final active = light.isReachable && light.isOn;
 
     return Card(
-      child: Opacity(
-        opacity: light.isReachable ? 1 : 0.45,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 12, 6),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  _Bulb(active: active, brightness: light.brightness),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          light.name,
-                          style: Theme.of(context).textTheme.titleMedium,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          _status(light),
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: light.isReachable
-                                ? scheme.onSurfaceVariant
-                                : scheme.error,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: widget.isSelected
+            ? BorderSide(color: scheme.primary.withValues(alpha: 0.7), width: 1.5)
+            : BorderSide.none,
+      ),
+      child: InkWell(
+        onTap: () => LightScope.of(context).select(light.id),
+        borderRadius: BorderRadius.circular(18),
+        child: Opacity(
+          opacity: light.isReachable ? 1 : 0.45,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 12, 6),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    _Bulb(active: active, brightness: light.brightness),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  light.name,
+                                  style: Theme.of(context).textTheme.titleMedium,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (widget.isSelected) ...[
+                                const SizedBox(width: 6),
+                                Tooltip(
+                                  message: 'The knob controls this light',
+                                  child: Icon(
+                                    Icons.tune,
+                                    size: 14,
+                                    color: scheme.primary,
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 2),
+                          Text(
+                            _status(light),
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: light.isReachable
+                                      ? scheme.onSurfaceVariant
+                                      : scheme.error,
+                                ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  Switch(
-                    value: light.isOn,
-                    onChanged: light.isReachable
-                        ? (value) => _send(LightCommand(isOn: value))
-                        : null,
-                  ),
-                ],
-              ),
-              Slider(
-                value: _brightness.clamp(0, 100),
-                max: 100,
-                divisions: 20,
-                label: '${_brightness.round()}%',
-                onChanged: light.isReachable
-                    ? (value) => setState(() => _dragging = value)
-                    : null,
-                onChangeEnd: (value) {
-                  _send(LightCommand(brightness: value.round()));
-                  setState(() => _dragging = null);
-                },
-              ),
-            ],
+                    Switch(
+                      value: light.isOn,
+                      onChanged: light.isReachable
+                          ? (value) => _send(LightCommand(isOn: value))
+                          : null,
+                    ),
+                  ],
+                ),
+                Slider(
+                  value: _brightness.clamp(0, 100),
+                  max: 100,
+                  divisions: 20,
+                  label: '${_brightness.round()}%',
+                  onChanged: light.isReachable
+                      ? (value) => setState(() => _dragging = value)
+                      : null,
+                  onChangeEnd: (value) {
+                    _send(LightCommand(brightness: value.round()));
+                    setState(() => _dragging = null);
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),
