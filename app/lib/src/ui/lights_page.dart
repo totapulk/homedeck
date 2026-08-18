@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../api/light_feed.dart';
 import '../models/light.dart';
 import '../state/light_store.dart';
 import 'light_tile.dart';
@@ -15,6 +16,7 @@ class LightsPage extends StatelessWidget {
       appBar: AppBar(
         title: const Text('HomeDeck'),
         actions: [
+          _RealtimeBadge(status: store.realtime),
           IconButton(
             onPressed: store.load,
             icon: const Icon(Icons.refresh),
@@ -34,6 +36,47 @@ class LightsPage extends StatelessWidget {
           child: _RoomList(lights: lights),
         ),
       },
+    );
+  }
+}
+
+/// Whether what is on screen is being kept current, or is just the last thing we heard.
+class _RealtimeBadge extends StatelessWidget {
+  const _RealtimeBadge({required this.status});
+
+  final RealtimeStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final (label, colour) = switch (status) {
+      RealtimeStatus.live => ('Live', scheme.primary),
+      RealtimeStatus.connecting => ('Connecting', scheme.onSurfaceVariant),
+      RealtimeStatus.offline => ('Offline', scheme.error),
+    };
+
+    return Tooltip(
+      message: switch (status) {
+        RealtimeStatus.live => 'Changes made anywhere show up here immediately',
+        RealtimeStatus.connecting => 'Reconnecting to the backend',
+        RealtimeStatus.offline => 'Showing the last state we were told about',
+      },
+      child: Row(
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(shape: BoxShape.circle, color: colour),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(color: colour),
+          ),
+        ],
+      ),
     );
   }
 }

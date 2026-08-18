@@ -1,4 +1,4 @@
-using HomeDeck.Api.Lights;
+﻿using HomeDeck.Api.Lights;
 using Microsoft.Extensions.Options;
 
 namespace HomeDeck.Api.Tests;
@@ -20,7 +20,7 @@ public class LightRegistryTests
     }
 
     private static LightSnapshot Snapshot(bool isOn = true, int brightness = 50, int? tempK = 2700) =>
-        new("444f8eb4a92e", isOn, brightness, tempK);
+        new("00005e005301", isOn, brightness, tempK);
 
     [Fact]
     public void Upsert_raises_Changed_the_first_time_a_light_is_seen()
@@ -32,7 +32,7 @@ public class LightRegistryTests
         registry.Upsert(Snapshot());
 
         var light = Assert.Single(raised);
-        Assert.Equal("444f8eb4a92e", light.Id);
+        Assert.Equal("00005e005301", light.Id);
         Assert.True(light.IsReachable);
     }
 
@@ -72,8 +72,8 @@ public class LightRegistryTests
 
         var raised = 0;
         registry.Changed += _ => raised++;
-        registry.MarkUnreachable("444f8eb4a92e");
-        registry.MarkUnreachable("444f8eb4a92e");
+        registry.MarkUnreachable("00005e005301");
+        registry.MarkUnreachable("00005e005301");
 
         // A bulb that is still offline on the next poll is not news.
         Assert.Equal(1, raised);
@@ -93,7 +93,7 @@ public class LightRegistryTests
     [Fact]
     public void Configured_naming_wins_over_the_generated_fallback()
     {
-        var registry = NewRegistry(("444f8eb4a92e", "Reading lamp", "Living room"));
+        var registry = NewRegistry(("00005e005301", "Reading lamp", "Living room"));
 
         var light = registry.Upsert(Snapshot());
 
@@ -109,7 +109,7 @@ public class LightRegistryTests
         var light = registry.Upsert(Snapshot());
 
         // Unnamed bulbs still have to be tellable apart in the UI.
-        Assert.Equal("Light A92E", light.Name);
+        Assert.Equal("Light 5301", light.Name);
         Assert.Equal("Unassigned", light.Room);
     }
 

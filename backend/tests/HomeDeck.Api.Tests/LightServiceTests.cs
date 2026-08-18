@@ -9,7 +9,7 @@ namespace HomeDeck.Api.Tests;
 public class LightServiceTests
 {
     private static LightState LightAt(int brightness, bool isOn = true) => new(
-        Id: "444f8eb4a92e",
+        Id: "00005e005301",
         Name: "Desk",
         Room: "Office",
         IsOn: isOn,
