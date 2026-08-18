@@ -1,9 +1,10 @@
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 
 import 'src/api/homedeck_api.dart';
 import 'src/api/signalr_light_feed.dart';
 import 'src/config.dart';
+import 'src/controller/ble_controller_input.dart';
 import 'src/controller/controller_binding.dart';
 import 'src/controller/controller_input.dart';
 import 'src/state/light_store.dart';
@@ -22,8 +23,9 @@ class HomeDeckApp extends StatefulWidget {
 
 class _HomeDeckAppState extends State<HomeDeckApp> {
   late final LightStore _store;
-  late final MockControllerInput _knob;
-  late final ControllerBinding _binding;
+  late final MockControllerInput _onScreenKnob;
+  late final List<ControllerInput> _controllers;
+  late final List<ControllerBinding> _bindings;
 
   @override
   void initState() {
@@ -37,17 +39,30 @@ class _HomeDeckAppState extends State<HomeDeckApp> {
     _store.load();
     _store.connect();
 
-    // Until the ESP32 exists this is the only controller. Swapping in the BLE one is a change
-    // to this line and nothing else.
-    _knob = MockControllerInput();
-    _binding = ControllerBinding(input: _knob, store: _store)..attach();
-    _knob.start();
+    // Two sources of the same events: the pad on screen and, where the platform has a radio,
+    // the knob on the shelf. Neither knows about the other, and the bindings do not care which
+    // one a turn came from.
+    _onScreenKnob = MockControllerInput();
+    _controllers = [_onScreenKnob, if (!kIsWeb) BleControllerInput()];
+    _bindings = [
+      for (final controller in _controllers)
+        ControllerBinding(input: controller, store: _store)..attach(),
+    ];
+
+    for (final controller in _controllers) {
+      controller.start();
+    }
   }
 
   @override
   void dispose() {
-    _binding.detach();
-    _knob.dispose();
+    for (final binding in _bindings) {
+      binding.detach();
+    }
+    for (final controller in _controllers) {
+      controller.stop();
+    }
+    _onScreenKnob.dispose();
     _store.dispose();
     super.dispose();
   }
@@ -60,7 +75,7 @@ class _HomeDeckAppState extends State<HomeDeckApp> {
     home: LightScope(
       store: _store,
       child: kDebugMode
-          ? DemoKnob(input: _knob, child: const LightsPage())
+          ? DemoKnob(input: _onScreenKnob, child: const LightsPage())
           : const LightsPage(),
     ),
   );

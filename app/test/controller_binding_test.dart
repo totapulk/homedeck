@@ -87,6 +87,55 @@ void main() {
     expect(commands.single, {'isOn': false});
   });
 
+  test('control 1 moves the selection instead of the brightness', () async {
+    final (knob, store, commands) = await knobOn(
+      '[${lightJson()},${lightJson(id: 'b2', name: 'Desk')}]',
+    );
+    expect(store.selected!.id, 'a1');
+
+    knob.rotate(1, control: 1);
+    await settle();
+
+    expect(store.selected!.id, 'b2');
+    expect(commands, isEmpty, reason: 'picking a light must not change one');
+  });
+
+  test('the selection wraps rather than stopping at the ends', () async {
+    final (knob, store, _) = await knobOn(
+      '[${lightJson()},${lightJson(id: 'b2', name: 'Desk')}]',
+    );
+
+    knob.rotate(-1, control: 1);
+    await settle();
+
+    // A knob has no end stops, so neither does the list.
+    expect(store.selected!.id, 'b2');
+  });
+
+  test('two controls turned at once do not pool their detents', () async {
+    final (knob, store, commands) = await knobOn(
+      '[${lightJson()},${lightJson(id: 'b2', name: 'Desk')}]',
+    );
+
+    knob.rotate(2, control: 0);
+    knob.rotate(1, control: 1);
+    await settle();
+
+    expect(commands.single, {'brightnessDelta': 10});
+    expect(store.selected!.id, 'b2');
+  });
+
+  test('an unknown control is treated as a dimmer rather than ignored', () async {
+    final (knob, _, commands) = await knobOn('[${lightJson()}]');
+
+    knob.rotate(1, control: 7);
+    await settle();
+
+    // A knob added to the firmware before the app has an opinion about it should still do
+    // something obvious, not nothing.
+    expect(commands.single, {'brightnessDelta': 5});
+  });
+
   test('the knob follows the selection rather than the list order', () async {
     final (knob, store, commands) = await knobOn(
       '[${lightJson()},${lightJson(id: 'b2', name: 'Desk')}]',

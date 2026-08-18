@@ -74,6 +74,21 @@ class LightStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Moves the selection along the list, wrapping at both ends. A knob has no end stops, so
+  /// neither does this.
+  void selectRelative(int offset) {
+    final lights = _lights;
+    if (lights.isEmpty || offset == 0) return;
+
+    final current = selected;
+    final index = current == null
+        ? 0
+        : lights.indexWhere((light) => light.id == current.id);
+
+    _selectedId = lights[(index + offset) % lights.length].id;
+    notifyListeners();
+  }
+
   /// Subscribes to backend pushes. Independent of [load]: the app is usable over REST alone,
   /// it just stops noticing changes it did not make.
   Future<void> connect() async {
