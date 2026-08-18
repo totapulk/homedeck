@@ -45,10 +45,49 @@ class LightStore extends ChangeNotifier {
 
   LightsState _state = const LightsLoading();
   RealtimeStatus _realtime = RealtimeStatus.connecting;
+  String? _selectedId;
 
   LightsState get state => _state;
 
   RealtimeStatus get realtime => _realtime;
+
+  /// The light a physical controller acts on.
+  ///
+  /// Falls back to the first reachable light rather than to nothing, because a knob that does
+  /// nothing until you have used the app first is a knob that looks broken.
+  Light? get selected {
+    final lights = _lights;
+    if (lights.isEmpty) return null;
+
+    if (_selectedId case final id?) {
+      for (final light in lights) {
+        if (light.id == id) return light;
+      }
+    }
+
+    return lights.firstWhere((light) => light.isReachable, orElse: () => lights.first);
+  }
+
+  void select(String id) {
+    if (_selectedId == id) return;
+    _selectedId = id;
+    notifyListeners();
+  }
+
+  /// Moves the selection along the list, wrapping at both ends. A knob has no end stops, so
+  /// neither does this.
+  void selectRelative(int offset) {
+    final lights = _lights;
+    if (lights.isEmpty || offset == 0) return;
+
+    final current = selected;
+    final index = current == null
+        ? 0
+        : lights.indexWhere((light) => light.id == current.id);
+
+    _selectedId = lights[(index + offset) % lights.length].id;
+    notifyListeners();
+  }
 
   /// Subscribes to backend pushes. Independent of [load]: the app is usable over REST alone,
   /// it just stops noticing changes it did not make.

@@ -1,6 +1,19 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
 
+    <!-- The knob. neverForLocation is accurate and worth declaring: scanning for one known
+         service UUID tells us nothing about where the phone is, and the flag spares the user a
+         location prompt they would rightly find strange. -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
+
+    <!-- Android 11 and earlier, where BLE scanning was a location-adjacent permission. -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30"/>
+
     <!-- The backend is a LAN appliance reached over plain HTTP; there is no certificate a
          phone would accept. Android blocks cleartext by default since API 28. -->
     <application
