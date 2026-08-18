@@ -5,6 +5,11 @@ using HomeDeck.Api.Realtime;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Naming your own bulbs should not mean committing a map of your home to a public repository,
+// so the light names live in a file git ignores. Optional on purpose: without it the app still
+// runs, it just calls every light by its device id.
+builder.Configuration.AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: true);
+
 builder.Services.AddOpenApi();
 builder.Services.Configure<HomeDeckOptions>(builder.Configuration.GetSection("HomeDeck"));
 

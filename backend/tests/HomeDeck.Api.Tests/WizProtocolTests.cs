@@ -10,9 +10,10 @@ namespace HomeDeck.Api.Tests;
 /// </summary>
 public class WizProtocolTests
 {
-    // Captured verbatim from a real bulb during discovery.
+    // Captured from a real bulb during discovery, with only the MAC swapped for one of the
+    // addresses RFC 7042 reserves for documentation.
     private const string RealGetPilotReply =
-        """{"method":"getPilot","env":"pro","result":{"mac":"444f8eb4a92e","rssi":-41,"state":true,"sceneId":11,"temp":2700,"dimming":80}}""";
+        """{"method":"getPilot","env":"pro","result":{"mac":"00005e005301","rssi":-41,"state":true,"sceneId":11,"temp":2700,"dimming":80}}""";
 
     [Fact]
     public void SetPilot_maps_brightness_to_dimming_and_implies_on()
@@ -58,7 +59,7 @@ public class WizProtocolTests
         var snapshot = WizProtocol.ParsePilot(Encoding.UTF8.GetBytes(RealGetPilotReply));
 
         Assert.NotNull(snapshot);
-        Assert.Equal("444f8eb4a92e", snapshot.DeviceId);
+        Assert.Equal("00005e005301", snapshot.DeviceId);
         Assert.True(snapshot.IsOn);
         Assert.Equal(80, snapshot.Brightness);
         Assert.Equal(2700, snapshot.ColorTempK);
@@ -68,7 +69,7 @@ public class WizProtocolTests
     public void ParsePilot_reports_zero_brightness_for_a_light_that_is_off()
     {
         // A bulb keeps its last dimming value while off; HomeDeck reports what the room looks like.
-        var reply = """{"method":"getPilot","result":{"mac":"cc408512fac6","state":false,"temp":2700,"dimming":53}}""";
+        var reply = """{"method":"getPilot","result":{"mac":"00005e005302","state":false,"temp":2700,"dimming":53}}""";
 
         var snapshot = WizProtocol.ParsePilot(Encoding.UTF8.GetBytes(reply));
 

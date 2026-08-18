@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 
 import '../api/homedeck_api.dart';
+import '../api/light_feed.dart';
 import '../models/light.dart';
 import '../models/light_command.dart';
 
@@ -25,17 +28,39 @@ class LightsUnavailable extends LightsState {
 }
 
 class LightStore extends ChangeNotifier {
-  LightStore(this._api);
+  LightStore(this._api, {LightFeed feed = const SilentLightFeed()}) : _feed = feed;
 
   final HomeDeckApi _api;
+  final LightFeed _feed;
 
   /// Newest command issued per light. A reply that is not the newest is a reply to a question
   /// nobody is asking any more, and applying it would drag the UI backwards.
   final Map<String, int> _issued = <String, int>{};
 
+  /// Commands still in the air, per light. While one is, the backend's pushes describe a world
+  /// that predates the button the user just pressed.
+  final Map<String, int> _inFlight = <String, int>{};
+
+  final List<StreamSubscription<void>> _subscriptions = [];
+
   LightsState _state = const LightsLoading();
+  RealtimeStatus _realtime = RealtimeStatus.connecting;
 
   LightsState get state => _state;
+
+  RealtimeStatus get realtime => _realtime;
+
+  /// Subscribes to backend pushes. Independent of [load]: the app is usable over REST alone,
+  /// it just stops noticing changes it did not make.
+  Future<void> connect() async {
+    _subscriptions.addAll([
+      _feed.status.listen(_receiveStatus),
+      _feed.snapshots.listen(_receiveSnapshot),
+      _feed.changes.listen(_receiveChange),
+    ]);
+
+    await _feed.start();
+  }
 
   Future<void> load() async {
     if (_state is! LightsReady) _publish(const LightsLoading());
@@ -52,6 +77,7 @@ class LightStore extends ChangeNotifier {
   Future<String?> apply(Light light, LightCommand command) async {
     final ticket = (_issued[light.id] ?? 0) + 1;
     _issued[light.id] = ticket;
+    _inFlight.update(light.id, (count) => count + 1, ifAbsent: () => 1);
 
     _replace(_predict(light, command));
 
@@ -62,8 +88,44 @@ class LightStore extends ChangeNotifier {
     } on HomeDeckApiException catch (error) {
       if (_issued[light.id] == ticket) _replace(light);
       return error.message;
+    } finally {
+      final remaining = (_inFlight[light.id] ?? 1) - 1;
+      if (remaining > 0) {
+        _inFlight[light.id] = remaining;
+      } else {
+        _inFlight.remove(light.id);
+      }
     }
   }
+
+  void _receiveStatus(RealtimeStatus status) {
+    if (_realtime == status) return;
+    _realtime = status;
+    notifyListeners();
+  }
+
+  /// Adopts the backend's whole picture, except for lights the user is currently commanding —
+  /// a snapshot assembled before the button was pressed would undo it on screen.
+  void _receiveSnapshot(List<Light> lights) {
+    final held = {
+      for (final light in _lights)
+        if (_isCommanding(light.id)) light.id: light,
+    };
+
+    _publish(LightsReady([for (final light in lights) held[light.id] ?? light]));
+  }
+
+  void _receiveChange(Light light) {
+    if (_isCommanding(light.id)) return;
+    _replace(light);
+  }
+
+  bool _isCommanding(String id) => _inFlight.containsKey(id);
+
+  List<Light> get _lights => switch (_state) {
+    LightsReady(:final lights) => lights,
+    _ => const <Light>[],
+  };
 
   /// The guess the UI runs on until the backend confirms. It deliberately repeats the backend's
   /// rule that brightness and on/off are the same dial — a knob wound to zero is a light off —
@@ -99,6 +161,10 @@ class LightStore extends ChangeNotifier {
 
   @override
   void dispose() {
+    for (final subscription in _subscriptions) {
+      subscription.cancel();
+    }
+    _feed.stop();
     _api.dispose();
     super.dispose();
   }

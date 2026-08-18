@@ -9,7 +9,7 @@ namespace HomeDeck.Api.Tests;
 /// </summary>
 public class LightReachabilityTests
 {
-    private const string DeviceId = "444f8eb4a92e";
+    private const string DeviceId = "00005e005301";
 
     private static LightRegistry NewRegistry() =>
         new(new StaticOptionsMonitor(new HomeDeckOptions()), TimeProvider.System);

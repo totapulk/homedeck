@@ -3,6 +3,9 @@ NOTES.md
 CLAUDE.md
 scratch/
 *.local.md
+
+# Machine-specific configuration: device ids, addresses, anything true of one home only.
+# Templates (*.local.template.json) are committed; the filled-in files are not.
 *.local.json
 
 # --- .NET ---

@@ -57,8 +57,22 @@ its own state — device discovery for free:
 
 ```
 $ dotnet run --project backend/tools/WizProbe -- discover
-192.168.0.220    {"method":"getPilot","env":"pro","result":{"mac":"...","state":true,"temp":2700,"dimming":80}}
+192.168.1.23    {"method":"getPilot","env":"pro","result":{"mac":"...","state":true,"temp":2700,"dimming":80}}
 ```
+
+## Configuration
+
+Lights are identified by their bulb MAC address, and giving them human names means writing down
+which device sits in which room — a fact about one particular home, not about this software.
+That mapping therefore lives in `backend/src/HomeDeck.Api/appsettings.local.json`, which git
+ignores. Copy the template beside it to make your own:
+
+```
+cp backend/src/HomeDeck.Api/appsettings.local.template.json \
+   backend/src/HomeDeck.Api/appsettings.local.json
+```
+
+The file is optional. Without it every bulb still appears, named after its device id.
 
 ## Roadmap
 
