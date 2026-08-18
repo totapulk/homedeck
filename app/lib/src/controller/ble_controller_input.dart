@@ -55,6 +55,18 @@ class BleControllerInput implements ControllerInput {
   Future<void> _hunt() async {
     while (_running) {
       try {
+        // Scanning with the radio off is not an error worth reporting, it is a thing to wait
+        // for: a user turning Bluetooth on later should find the knob works, without restarting
+        // anything. Some platform implementations also fail badly rather than politely when
+        // asked to scan with no radio.
+        if (!await FlutterBluePlus.isSupported) {
+          _status.add(ControllerStatus.disconnected);
+          return;
+        }
+        await FlutterBluePlus.adapterState.firstWhere(
+          (state) => state == BluetoothAdapterState.on,
+        );
+
         _status.add(ControllerStatus.searching);
 
         if (await _findKnob() case final device?) {
