@@ -4,10 +4,16 @@ namespace HomeDeck.Api.Lights;
 /// Canonical state of one light, as the API and every client sees it.
 /// Deliberately vendor-neutral: nothing in here hints at WiZ, UDP or JSON payloads.
 /// </summary>
+/// <param name="Fixture">
+/// The physical lamp this bulb is part of, when several share one. A three-bulb ceiling light
+/// is one thing to a person and three things to the network, and the person is right — clients
+/// present a fixture as a single control.
+/// </param>
 public sealed record LightState(
     string Id,
     string Name,
     string Room,
+    string? Fixture,
     bool IsOn,
     int Brightness,
     int? ColorTempK,

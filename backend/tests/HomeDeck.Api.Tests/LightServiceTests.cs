@@ -12,6 +12,7 @@ public class LightServiceTests
         Id: "00005e005301",
         Name: "Desk",
         Room: "Office",
+        Fixture: null,
         IsOn: isOn,
         Brightness: brightness,
         ColorTempK: 2700,

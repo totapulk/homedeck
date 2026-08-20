@@ -10,30 +10,39 @@ import 'package:http/testing.dart';
 
 const Duration _window = Duration(milliseconds: 20);
 
-String lightJson({
-  String id = 'a1',
-  String name = 'Reading lamp',
-  bool isOn = true,
-  int brightness = 70,
-  bool isReachable = true,
-}) =>
-    '{"id":"$id","name":"$name","room":"Living room","isOn":$isOn,'
-    '"brightness":$brightness,"colorTempK":2700,"isReachable":$isReachable,'
-    '"updatedAt":"2026-08-18T10:00:00Z"}';
+/// Two rooms, three lights, all at different brightness.
+const String _home = '''
+[
+  {"id":"a1","name":"Reading lamp","room":"Living room","isOn":true,"brightness":80,
+   "colorTempK":2700,"isReachable":true,"updatedAt":"2026-08-19T10:00:00Z"},
+  {"id":"a2","name":"Ceiling","room":"Living room","isOn":true,"brightness":40,
+   "colorTempK":2700,"isReachable":true,"updatedAt":"2026-08-19T10:00:00Z"},
+  {"id":"b1","name":"Desk","room":"Office","isOn":false,"brightness":0,
+   "colorTempK":2700,"isReachable":true,"updatedAt":"2026-08-19T10:00:00Z"}
+]
+''';
 
-/// A wired-up knob, store and recording backend.
-Future<(MockControllerInput, LightStore, List<Map<String, dynamic>>)> knobOn(
-  String lightsJson,
-) async {
-  final commands = <Map<String, dynamic>>[];
+/// A wired-up knob and store, recording which light each command was aimed at.
+Future<(MockControllerInput, LightStore, Map<String, List<Map<String, dynamic>>>)>
+knobOn([String home = _home]) async {
+  final commands = <String, List<Map<String, dynamic>>>{};
+  final known = {
+    for (final light in (jsonDecode(home) as List).cast<Map<String, dynamic>>())
+      light['id'] as String: light,
+  };
 
   final store = LightStore(
     HomeDeckApi(
       baseUrl: Uri.parse('http://backend'),
       client: MockClient((request) async {
-        if (request.method == 'GET') return http.Response(lightsJson, 200);
-        commands.add(jsonDecode(request.body) as Map<String, dynamic>);
-        return http.Response(lightJson(), 200);
+        if (request.method == 'GET') return http.Response(home, 200);
+
+        final id = request.url.pathSegments[2];
+        (commands[id] ??= []).add(jsonDecode(request.body) as Map<String, dynamic>);
+
+        // Echo the light the command was aimed at. A confirmation that renamed the light
+        // would be a fiction the store would then have to live with.
+        return http.Response(jsonEncode(known[id]), 200);
       }),
     ),
   );
@@ -44,127 +53,119 @@ Future<(MockControllerInput, LightStore, List<Map<String, dynamic>>)> knobOn(
   return (knob, store, commands);
 }
 
-Future<void> settle() => Future<void>.delayed(_window * 3);
+Future<void> settle() => Future<void>.delayed(_window * 4);
 
 void main() {
-  test('a detent becomes a relative brightness command', () async {
-    final (knob, _, commands) = await knobOn('[${lightJson()}]');
+  test('with nothing chosen the knob moves the whole home', () async {
+    final (knob, store, commands) = await knobOn();
+    expect(store.selectionLabel, 'All lights');
 
     knob.rotate(1);
     await settle();
 
-    // Relative, not absolute: the knob never sends a brightness, only a change to one.
-    expect(commands.single, {'brightnessDelta': 5});
+    expect(commands.keys.toSet(), {'a1', 'a2', 'b1'});
+    expect(commands['a1']!.single, {'brightnessDelta': 5});
   });
 
-  test('turning the other way sends the opposite sign', () async {
-    final (knob, _, commands) = await knobOn('[${lightJson()}]');
+  test('a group moves by a delta, so the lights keep their differences', () async {
+    final (knob, store, commands) = await knobOn();
 
-    knob.rotate(-3);
+    knob.rotate(-4);
     await settle();
 
-    expect(commands.single, {'brightnessDelta': -15});
+    // 80 and 40 both fall by 20. An absolute control would have collapsed them onto one value.
+    expect(commands['a1']!.single, {'brightnessDelta': -20});
+    expect(commands['a2']!.single, {'brightnessDelta': -20});
+    expect(store.selectedLights.length, 3);
   });
 
-  test('a fast spin becomes one request, not one per detent', () async {
-    final (knob, _, commands) = await knobOn('[${lightJson()}]');
+  test('choosing a room narrows the knob to that room', () async {
+    final (knob, store, commands) = await knobOn();
+
+    store.selectRoom('Living room');
+    knob.rotate(2);
+    await settle();
+
+    expect(commands.keys.toSet(), {'a1', 'a2'});
+    expect(store.selectionLabel, 'Living room');
+  });
+
+  test('choosing one light narrows it to that light', () async {
+    final (knob, store, commands) = await knobOn();
+
+    store.selectLight('b1');
+    knob.rotate(1);
+    await settle();
+
+    expect(commands.keys.toSet(), {'b1'});
+    expect(store.selectionLabel, 'Desk');
+  });
+
+  test('widening back to everything is one call', () async {
+    final (knob, store, commands) = await knobOn();
+
+    store.selectLight('b1');
+    store.selectAll();
+    knob.rotate(1);
+    await settle();
+
+    expect(commands.keys.toSet(), {'a1', 'a2', 'b1'});
+  });
+
+  test('a press turns the whole selection off when any of it is on', () async {
+    final (knob, store, commands) = await knobOn();
+    store.selectRoom('Living room');
+
+    knob.press();
+    await settle();
+
+    // Toggling each light on its own would leave a room half lit, which is not what one
+    // button should ever produce.
+    expect(commands['a1']!.single, {'isOn': false});
+    expect(commands['a2']!.single, {'isOn': false});
+  });
+
+  test('a press turns everything on when none of it is', () async {
+    final (knob, store, commands) = await knobOn();
+    store.selectLight('b1');
+
+    knob.press();
+    await settle();
+
+    expect(commands['b1']!.single, {'isOn': true});
+  });
+
+  test('a fast spin becomes one request per light, not one per detent', () async {
+    final (knob, store, commands) = await knobOn();
+    store.selectLight('a1');
 
     for (var detent = 0; detent < 12; detent++) {
       knob.rotate(1);
     }
     await settle();
 
-    // A bulb answering over UDP cannot keep up with a hand; the deltas are summed instead.
-    expect(commands.single, {'brightnessDelta': 60});
+    expect(commands['a1']!.single, {'brightnessDelta': 60});
   });
 
-  test('a press toggles the light the knob is on', () async {
-    final (knob, _, commands) = await knobOn('[${lightJson(isOn: true)}]');
+  test('the second knob is reserved and does nothing yet', () async {
+    final (knob, _, commands) = await knobOn();
 
-    knob.press();
+    knob.rotate(3, control: 1);
+    knob.press(control: 1);
     await settle();
 
-    expect(commands.single, {'isOn': false});
-  });
-
-  test('control 1 moves the selection instead of the brightness', () async {
-    final (knob, store, commands) = await knobOn(
-      '[${lightJson()},${lightJson(id: 'b2', name: 'Desk')}]',
-    );
-    expect(store.selected!.id, 'a1');
-
-    knob.rotate(1, control: 1);
-    await settle();
-
-    expect(store.selected!.id, 'b2');
-    expect(commands, isEmpty, reason: 'picking a light must not change one');
-  });
-
-  test('the selection wraps rather than stopping at the ends', () async {
-    final (knob, store, _) = await knobOn(
-      '[${lightJson()},${lightJson(id: 'b2', name: 'Desk')}]',
-    );
-
-    knob.rotate(-1, control: 1);
-    await settle();
-
-    // A knob has no end stops, so neither does the list.
-    expect(store.selected!.id, 'b2');
-  });
-
-  test('two controls turned at once do not pool their detents', () async {
-    final (knob, store, commands) = await knobOn(
-      '[${lightJson()},${lightJson(id: 'b2', name: 'Desk')}]',
-    );
-
-    knob.rotate(2, control: 0);
-    knob.rotate(1, control: 1);
-    await settle();
-
-    expect(commands.single, {'brightnessDelta': 10});
-    expect(store.selected!.id, 'b2');
-  });
-
-  test('an unknown control is treated as a dimmer rather than ignored', () async {
-    final (knob, _, commands) = await knobOn('[${lightJson()}]');
-
-    knob.rotate(1, control: 7);
-    await settle();
-
-    // A knob added to the firmware before the app has an opinion about it should still do
-    // something obvious, not nothing.
-    expect(commands.single, {'brightnessDelta': 5});
-  });
-
-  test('the knob follows the selection rather than the list order', () async {
-    final (knob, store, commands) = await knobOn(
-      '[${lightJson()},${lightJson(id: 'b2', name: 'Desk')}]',
-    );
-
-    store.select('b2');
-    knob.rotate(2);
-    await settle();
-
-    expect(commands.single, {'brightnessDelta': 10});
-    expect(store.selected!.id, 'b2');
-  });
-
-  test('with nothing to control the knob is harmless', () async {
-    final (knob, store, commands) = await knobOn('[]');
-
-    knob.rotate(4);
-    knob.press();
-    await settle();
-
-    expect(store.selected, isNull);
+    // It is destined for the vacuum. Dimming lights in the meantime would have to be untaught.
     expect(commands, isEmpty);
   });
 
-  test('an unreachable light is not what the knob defaults to', () async {
-    final (_, store, _) = await knobOn(
-      '[${lightJson(isReachable: false)},${lightJson(id: 'b2', name: 'Desk')}]',
-    );
+  test('a selection that no longer exists falls back to everything', () async {
+    final (knob, store, commands) = await knobOn();
 
-    expect(store.selected!.id, 'b2');
+    store.selectLight('gone');
+    knob.rotate(1);
+    await settle();
+
+    expect(commands.keys.toSet(), {'a1', 'a2', 'b1'});
+    expect(store.selectionLabel, 'All lights');
   });
 }

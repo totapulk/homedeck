@@ -8,6 +8,7 @@ import 'src/controller/ble_controller_input.dart';
 import 'src/controller/controller_binding.dart';
 import 'src/controller/controller_input.dart';
 import 'src/state/light_store.dart';
+import 'src/ui/ambient_dim.dart';
 import 'src/ui/demo_knob.dart';
 import 'src/ui/lights_page.dart';
 import 'src/ui/theme.dart';
@@ -81,9 +82,11 @@ class _HomeDeckAppState extends State<HomeDeckApp> {
     theme: homeDeckTheme(),
     home: LightScope(
       store: _store,
-      child: kDebugMode
-          ? DemoKnob(input: _onScreenKnob, child: const LightsPage())
-          : const LightsPage(),
+      child: AmbientDim(
+        child: kDebugMode
+            ? DemoKnob(input: _onScreenKnob, child: const LightsPage())
+            : const LightsPage(),
+      ),
     ),
   );
 }

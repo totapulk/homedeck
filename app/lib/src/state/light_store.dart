@@ -7,6 +7,8 @@ import '../api/light_feed.dart';
 import '../controller/controller_input.dart';
 import '../models/light.dart';
 import '../models/light_command.dart';
+import '../models/light_group.dart';
+import '../models/light_selection.dart';
 
 sealed class LightsState {
   const LightsState();
@@ -47,7 +49,8 @@ class LightStore extends ChangeNotifier {
   LightsState _state = const LightsLoading();
   RealtimeStatus _realtime = RealtimeStatus.connecting;
   ControllerStatus _knob = ControllerStatus.disconnected;
-  String? _selectedId;
+  LightSelection _selection = const AllLights();
+  int _interactions = 0;
 
   LightsState get state => _state;
 
@@ -63,42 +66,65 @@ class LightStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// The light a physical controller acts on.
+  /// Counts deliberate human input — a turn, a press, a tap. A light changing on its own is
+  /// not one of these, which is what lets the panel stay dim while the house carries on
+  /// around it.
+  int get interactions => _interactions;
+
+  void noteInteraction() {
+    _interactions++;
+    notifyListeners();
+  }
+
+  /// What the knob currently acts on: everything, one room, or one light.
+  LightSelection get selection => _selection;
+
+  /// The lights the knob would move right now.
+  List<Light> get selectedLights => _selection.resolve(_lights);
+
+  /// How to name the current selection on screen.
+  String get selectionLabel => _selection.describe(_lights);
+
+  void selectAll() => _select(const AllLights());
+
+  void selectRoom(String room) => _select(RoomSelection(room));
+
+  void selectFixture(String fixture) => _select(FixtureSelection(fixture));
+
+  void selectLight(String id) => _select(SingleLight(id));
+
+  /// True when the knob would move every light in this group.
+  bool isGroupSelected(LightGroup group) {
+    final selected = selectedLights;
+    return group.lights.every(
+      (light) => selected.any((candidate) => candidate.id == light.id),
+    );
+  }
+
+  void _select(LightSelection next) {
+    if (_selection == next) return;
+    _selection = next;
+    notifyListeners();
+  }
+
+  /// Applies one command to every light in the current selection.
   ///
-  /// Falls back to the first reachable light rather than to nothing, because a knob that does
-  /// nothing until you have used the app first is a knob that looks broken.
-  Light? get selected {
-    final lights = _lights;
-    if (lights.isEmpty) return null;
+  /// A relative command applied to a group keeps the lights' differences intact — three lamps
+  /// at 80, 40 and 20 all move by the same amount rather than collapsing onto one value. That
+  /// is the property an absolute control could not have.
+  Future<String?> applyToSelection(LightCommand command) =>
+      applyToAll(selectedLights, command);
 
-    if (_selectedId case final id?) {
-      for (final light in lights) {
-        if (light.id == id) return light;
-      }
+  /// Sends one command to several lights at once, reporting the first thing that went wrong.
+  Future<String?> applyToAll(List<Light> lights, LightCommand command) async {
+    final failures = await Future.wait([
+      for (final light in lights) apply(light, command),
+    ]);
+
+    for (final failure in failures) {
+      if (failure != null) return failure;
     }
-
-    return lights.firstWhere((light) => light.isReachable, orElse: () => lights.first);
-  }
-
-  void select(String id) {
-    if (_selectedId == id) return;
-    _selectedId = id;
-    notifyListeners();
-  }
-
-  /// Moves the selection along the list, wrapping at both ends. A knob has no end stops, so
-  /// neither does this.
-  void selectRelative(int offset) {
-    final lights = _lights;
-    if (lights.isEmpty || offset == 0) return;
-
-    final current = selected;
-    final index = current == null
-        ? 0
-        : lights.indexWhere((light) => light.id == current.id);
-
-    _selectedId = lights[(index + offset) % lights.length].id;
-    notifyListeners();
+    return null;
   }
 
   /// Subscribes to backend pushes. Independent of [load]: the app is usable over REST alone,

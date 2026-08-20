@@ -8,6 +8,12 @@ public sealed class LightNaming
 {
     public string? Name { get; set; }
     public string? Room { get; set; }
+
+    /// <summary>
+    /// Groups bulbs that share one physical lamp. Bulbs naming the same fixture are shown and
+    /// controlled as one; a bulb naming none is a lamp of its own.
+    /// </summary>
+    public string? Fixture { get; set; }
 }
 
 public sealed class HomeDeckOptions
@@ -54,6 +60,7 @@ public sealed class LightRegistry(IOptionsMonitor<HomeDeckOptions> options, Time
             Id: snapshot.DeviceId,
             Name: naming?.Name ?? DefaultName(snapshot.DeviceId),
             Room: naming?.Room ?? "Unassigned",
+            Fixture: naming?.Fixture,
             IsOn: snapshot.IsOn,
             Brightness: snapshot.Brightness,
             ColorTempK: snapshot.ColorTempK,
