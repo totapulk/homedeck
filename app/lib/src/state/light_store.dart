@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 
 import '../api/homedeck_api.dart';
 import '../api/light_feed.dart';
+import '../controller/controller_input.dart';
 import '../models/light.dart';
 import '../models/light_command.dart';
 
@@ -45,11 +46,22 @@ class LightStore extends ChangeNotifier {
 
   LightsState _state = const LightsLoading();
   RealtimeStatus _realtime = RealtimeStatus.connecting;
+  ControllerStatus _knob = ControllerStatus.disconnected;
   String? _selectedId;
 
   LightsState get state => _state;
 
   RealtimeStatus get realtime => _realtime;
+
+  /// Whether a physical controller is attached. Only hardware reports here: the on-screen pad
+  /// is by definition present, so saying so would be noise.
+  ControllerStatus get knob => _knob;
+
+  void reportController(ControllerStatus status) {
+    if (_knob == status) return;
+    _knob = status;
+    notifyListeners();
+  }
 
   /// The light a physical controller acts on.
   ///

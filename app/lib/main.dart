@@ -43,7 +43,14 @@ class _HomeDeckAppState extends State<HomeDeckApp> {
     // the knob on the shelf. Neither knows about the other, and the bindings do not care which
     // one a turn came from.
     _onScreenKnob = MockControllerInput();
-    _controllers = [_onScreenKnob, if (!kIsWeb) BleControllerInput()];
+
+    // Only the radio reports its status to the UI. The pad on screen is present by definition,
+    // and letting it announce itself as "connected" would drown out the answer to the question
+    // the badge exists for: is the knob on the shelf talking to us?
+    final ControllerInput? knob = kIsWeb ? null : BleControllerInput();
+    knob?.status.listen(_store.reportController);
+
+    _controllers = [_onScreenKnob, ?knob];
     _bindings = [
       for (final controller in _controllers)
         ControllerBinding(input: controller, store: _store)..attach(),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../api/light_feed.dart';
+import '../controller/controller_input.dart';
 import '../models/light.dart';
 import '../state/light_store.dart';
 import 'light_tile.dart';
@@ -16,6 +17,8 @@ class LightsPage extends StatelessWidget {
       appBar: AppBar(
         title: const Text('HomeDeck'),
         actions: [
+          _KnobBadge(status: store.knob),
+          const SizedBox(width: 12),
           _RealtimeBadge(status: store.realtime),
           IconButton(
             onPressed: store.load,
@@ -36,6 +39,35 @@ class LightsPage extends StatelessWidget {
           child: _RoomList(lights: lights, selectedId: store.selected?.id),
         ),
       },
+    );
+  }
+}
+
+/// Whether the physical knob is attached. Silent when there is no radio to speak of.
+class _KnobBadge extends StatelessWidget {
+  const _KnobBadge({required this.status});
+
+  final ControllerStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Tooltip(
+      message: switch (status) {
+        ControllerStatus.connected => 'The knob is connected',
+        ControllerStatus.searching => 'Looking for the knob',
+        ControllerStatus.disconnected => 'No knob found',
+      },
+      child: Icon(
+        Icons.tune,
+        size: 18,
+        color: switch (status) {
+          ControllerStatus.connected => scheme.primary,
+          ControllerStatus.searching => scheme.onSurfaceVariant,
+          ControllerStatus.disconnected => scheme.onSurfaceVariant.withValues(alpha: 0.35),
+        },
+      ),
     );
   }
 }

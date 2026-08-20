@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 import 'controller_input.dart';
@@ -70,11 +71,16 @@ class BleControllerInput implements ControllerInput {
         _status.add(ControllerStatus.searching);
 
         if (await _findKnob() case final device?) {
+          _log('found ${device.remoteId}, connecting');
           await _stayAttached(device);
+        } else {
+          _log('no knob answered the scan');
         }
-      } catch (_) {
+      } catch (error, stack) {
         // Adapter off, permission refused, knob unplugged mid-handshake. All of them mean the
-        // same thing here: try again in a moment.
+        // same thing for the retry loop — but swallowing them silently turns "the badge never
+        // lights up" into an unanswerable question, so they are always logged.
+        _log('$error', stack);
       }
 
       _status.add(ControllerStatus.disconnected);
@@ -82,12 +88,33 @@ class BleControllerInput implements ControllerInput {
     }
   }
 
+  static void _log(String message, [StackTrace? stack]) {
+    debugPrint('[knob] $message');
+    if (stack != null) debugPrintStack(stackTrace: stack, maxFrames: 6);
+  }
+
   Future<BluetoothDevice?> _findKnob() async {
     final found = Completer<BluetoothDevice?>();
 
+    // The platform filter is a hint, not a guarantee: some backends hand back everything they
+    // heard. Confirming the service in the advertisement ourselves is cheap, and the failure it
+    // prevents — connecting to a stranger's headphones and waiting for knob events that will
+    // never come — is a confusing one to debug.
     final subscription = FlutterBluePlus.scanResults.listen((results) {
-      if (results.isEmpty || found.isCompleted) return;
-      found.complete(results.first.device);
+      if (found.isCompleted) return;
+
+      for (final result in results) {
+        final advertised = result.advertisementData.serviceUuids;
+        _log(
+          'candidate ${result.device.remoteId} "${result.advertisementData.advName}" '
+          'services=[${advertised.map((uuid) => uuid.str).join(', ')}]',
+        );
+
+        if (!advertised.contains(serviceUuid)) continue;
+
+        found.complete(result.device);
+        return;
+      }
     });
 
     try {
@@ -111,8 +138,15 @@ class BleControllerInput implements ControllerInput {
     _device = device;
     final disconnected = Completer<void>();
 
+    // connectionState replays the current state the moment it is listened to, and that state is
+    // "disconnected" because connecting has not been asked for yet. Treating that reply as a
+    // disconnection would end the attachment before it began — which it did, on every other
+    // attempt, depending on whether the platform still had the device cached as connected.
+    var attached = false;
+
     final connection = device.connectionState.listen((state) {
-      if (state == BluetoothConnectionState.disconnected && !disconnected.isCompleted) {
+      _log('connection state: ${state.name}');
+      if (state == BluetoothConnectionState.disconnected && attached && !disconnected.isCompleted) {
         disconnected.complete();
       }
     });
@@ -121,9 +155,24 @@ class BleControllerInput implements ControllerInput {
     try {
       // License.nonprofit is the accurate choice for a personal portfolio project;
       // flutter_blue_plus 2.x asks for a paid licence for for-profit use.
-      await device.connect(license: License.nonprofit);
+      //
+      // mtu: null skips MTU negotiation. Notifications here are three bytes, so a larger MTU
+      // buys nothing, and negotiating one is a step that some platform backends handle badly.
+      await device.connect(license: License.nonprofit, mtu: null);
+
+      // connect() resolves optimistically on some backends, before the link is actually up, and
+      // discoverServices then fails with "device is not connected". Waiting for the state the
+      // connection claims to have reached turns a coin flip into a connection.
+      await device.connectionState
+          .firstWhere((state) => state == BluetoothConnectionState.connected)
+          .timeout(const Duration(seconds: 10));
+
+      _log('connected, discovering services');
 
       final services = await device.discoverServices();
+      _log('discovered ${services.length} service(s): '
+          '${services.map((service) => service.uuid.str).join(', ')}');
+
       final service = services.firstWhere((service) => service.uuid == serviceUuid);
       final characteristic = service.characteristics.firstWhere(
         (characteristic) => characteristic.uuid == eventsUuid,
@@ -131,9 +180,17 @@ class BleControllerInput implements ControllerInput {
 
       values = characteristic.onValueReceived.listen(_decode);
       await characteristic.setNotifyValue(true);
+      _log('subscribed to events');
 
+      attached = true;
       _status.add(ControllerStatus.connected);
+
+      // Setting up took a few round trips; the knob may already have gone in the meantime, and
+      // the listener would have ignored that while attached was still false.
+      if (!device.isConnected && !disconnected.isCompleted) disconnected.complete();
+
       await disconnected.future;
+      _log('knob went away');
     } finally {
       await values?.cancel();
       await connection.cancel();
