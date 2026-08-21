@@ -102,6 +102,33 @@ public class LightRegistryTests
     }
 
     [Fact]
+    public void Bulbs_sharing_a_lamp_carry_the_same_fixture()
+    {
+        var options = new HomeDeckOptions
+        {
+            Lights =
+            {
+                ["00005e005301"] = new LightNaming { Name = "Bulb 1", Fixture = "Ceiling lamp" },
+                ["00005e005302"] = new LightNaming { Name = "Bulb 2", Fixture = "Ceiling lamp" },
+            },
+        };
+        var registry = new LightRegistry(
+            new StaticOptionsMonitor<HomeDeckOptions>(options), TimeProvider.System);
+
+        var first = registry.Upsert(new LightSnapshot("00005e005301", true, 50, 2700));
+        var second = registry.Upsert(new LightSnapshot("00005e005302", true, 50, 2700));
+
+        Assert.Equal("Ceiling lamp", first.Fixture);
+        Assert.Equal(first.Fixture, second.Fixture);
+    }
+
+    [Fact]
+    public void A_light_belonging_to_no_lamp_has_no_fixture()
+    {
+        Assert.Null(NewRegistry().Upsert(Snapshot()).Fixture);
+    }
+
+    [Fact]
     public void An_unlisted_light_is_named_after_its_device_id()
     {
         var registry = NewRegistry();

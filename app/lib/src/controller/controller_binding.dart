@@ -5,24 +5,22 @@ import '../state/light_store.dart';
 import 'controller_input.dart';
 
 /// What turning a particular control is for.
-enum ControlRole {
-  /// Changes the selected light's brightness.
-  brightness,
-
-  /// Moves the selection from light to light, so the other knob has something to act on.
-  selection,
-}
+///
+/// One entry so far. The second knob is deliberately unassigned: it is destined for the vacuum,
+/// and a knob that dims lights in the meantime would have to be untaught later — worse than one
+/// that politely does nothing.
+enum ControlRole { brightness }
 
 /// Gives a controller's events a meaning: which control does what, and what a turn is worth.
 ///
-/// This is the layer the ESP32 knows nothing about. Deciding that knob 1 should pick a vacuum
-/// programme instead of a light is a change here and nowhere else — no reflashing, and covered
-/// by tests that never touch hardware.
+/// This is the layer the ESP32 knows nothing about. Pointing knob 1 at a vacuum instead of a
+/// light is a change here and nowhere else — no reflashing, and covered by tests that never
+/// touch hardware.
 class ControllerBinding {
   ControllerBinding({
     required ControllerInput input,
     required LightStore store,
-    this.roles = const {0: ControlRole.brightness, 1: ControlRole.selection},
+    this.roles = const {0: ControlRole.brightness},
     this.brightnessPerDetent = 5,
     this.settleWindow = const Duration(milliseconds: 120),
   }) : _input = input,
@@ -63,12 +61,22 @@ class ControllerBinding {
     _subscription = null;
   }
 
-  void _handle(ControllerEvent event) => switch (event) {
-    Rotated(:final control, :final detents) => _rotate(control, detents),
-    Pressed(:final control) => _press(control),
-  };
+  void _handle(ControllerEvent event) {
+    // Every event counts as someone being present, even one aimed at a control with no role
+    // yet: a hand on the knob should wake the panel whether or not the turn changes a light.
+    _store.noteInteraction();
+
+    switch (event) {
+      case Rotated(:final control, :final detents):
+        _rotate(control, detents);
+      case Pressed(:final control):
+        _press(control);
+    }
+  }
 
   void _rotate(int control, int detents) {
+    if (roles[control] != ControlRole.brightness) return;
+
     _pendingDetents.update(control, (pending) => pending + detents, ifAbsent: () => detents);
 
     // Started, not restarted: a continuous turn must still produce a command every window
@@ -82,21 +90,23 @@ class ControllerBinding {
     final detents = _pendingDetents.remove(control) ?? 0;
     if (detents == 0) return;
 
-    switch (roles[control] ?? ControlRole.brightness) {
-      case ControlRole.brightness:
-        if (_store.selected case final light?) {
-          _store.apply(light, LightCommand(brightnessDelta: detents * brightnessPerDetent));
-        }
-      case ControlRole.selection:
-        _store.selectRelative(detents);
-    }
+    _store.applyToSelection(
+      LightCommand(brightnessDelta: detents * brightnessPerDetent),
+    );
   }
 
-  /// Pressing any control toggles whatever is selected. One press is a coarse gesture and a
-  /// light being on or off is the coarsest thing about it.
+  /// A press toggles the whole selection together.
+  ///
+  /// If anything in it is on, the press turns everything off; otherwise it turns everything on.
+  /// Toggling each light independently would scatter a room into a half-lit mess, which is not
+  /// what a single button should ever produce.
   void _press(int control) {
-    if (_store.selected case final light?) {
-      _store.apply(light, LightCommand(isOn: !light.isOn));
-    }
+    if (roles[control] != ControlRole.brightness) return;
+
+    final lights = _store.selectedLights;
+    if (lights.isEmpty) return;
+
+    final anyOn = lights.any((light) => light.isOn);
+    _store.applyToSelection(LightCommand(isOn: !anyOn));
   }
 }

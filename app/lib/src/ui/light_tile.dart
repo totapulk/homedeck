@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
 
-import '../models/light.dart';
 import '../models/light_command.dart';
+import '../models/light_group.dart';
 import '../state/light_store.dart';
 
+/// One lamp on screen — which may be one bulb, or several sharing a fixture.
+///
+/// Nothing here knows the difference beyond the label: a group of one behaves exactly like a
+/// group of three, so the switch, the slider and the selection have no special cases.
 class LightTile extends StatefulWidget {
-  const LightTile({super.key, required this.light, this.isSelected = false});
+  const LightTile({super.key, required this.group, this.isSelected = false});
 
-  final Light light;
+  final LightGroup group;
 
-  /// Whether a physical controller acts on this light.
+  /// Whether the knob would move this lamp.
   final bool isSelected;
 
   @override
@@ -21,13 +25,13 @@ class _LightTileState extends State<LightTile> {
   /// gesture, so dragging stays smooth without a request per pixel.
   double? _dragging;
 
-  double get _brightness => _dragging ?? widget.light.brightness.toDouble();
+  double get _brightness => _dragging ?? widget.group.brightness.toDouble();
 
   Future<void> _send(LightCommand command) async {
     final store = LightScope.of(context);
     final messenger = ScaffoldMessenger.of(context);
 
-    final failure = await store.apply(widget.light, command);
+    final failure = await store.applyToAll(widget.group.lights, command);
     if (failure == null || !mounted) return;
 
     messenger
@@ -35,64 +39,61 @@ class _LightTileState extends State<LightTile> {
       ..showSnackBar(SnackBar(content: Text(failure)));
   }
 
+  void _select() {
+    final store = LightScope.of(context);
+    final group = widget.group;
+
+    if (group.fixture case final fixture?) {
+      store.selectFixture(fixture);
+    } else {
+      store.selectLight(group.lights.first.id);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final light = widget.light;
+    final group = widget.group;
     final scheme = Theme.of(context).colorScheme;
-    final active = light.isReachable && light.isOn;
+    final active = group.isReachable && group.isOn;
 
     return Card(
+      // Every lamp the knob would move is outlined, so "what am I about to change" is answered
+      // by looking rather than by remembering. With the whole home selected that is every card,
+      // which is why the outline is quiet rather than loud.
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
         side: widget.isSelected
-            ? BorderSide(color: scheme.primary.withValues(alpha: 0.7), width: 1.5)
+            ? BorderSide(color: scheme.primary.withValues(alpha: 0.45), width: 1)
             : BorderSide.none,
       ),
       child: InkWell(
-        onTap: () => LightScope.of(context).select(light.id),
+        onTap: _select,
         borderRadius: BorderRadius.circular(18),
         child: Opacity(
-          opacity: light.isReachable ? 1 : 0.45,
+          opacity: group.isReachable ? 1 : 0.45,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 12, 6),
             child: Column(
               children: [
                 Row(
                   children: [
-                    _Bulb(active: active, brightness: light.brightness),
+                    _Bulb(active: active, brightness: group.brightness),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  light.name,
-                                  style: Theme.of(context).textTheme.titleMedium,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              if (widget.isSelected) ...[
-                                const SizedBox(width: 6),
-                                Tooltip(
-                                  message: 'The knob controls this light',
-                                  child: Icon(
-                                    Icons.tune,
-                                    size: 14,
-                                    color: scheme.primary,
-                                  ),
-                                ),
-                              ],
-                            ],
+                          Text(
+                            group.name,
+                            style: Theme.of(context).textTheme.titleMedium,
+                            overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            _status(light),
+                            _status(group),
                             style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(
-                                  color: light.isReachable
+                                  color: group.isReachable
                                       ? scheme.onSurfaceVariant
                                       : scheme.error,
                                 ),
@@ -101,8 +102,8 @@ class _LightTileState extends State<LightTile> {
                       ),
                     ),
                     Switch(
-                      value: light.isOn,
-                      onChanged: light.isReachable
+                      value: group.isOn,
+                      onChanged: group.isReachable
                           ? (value) => _send(LightCommand(isOn: value))
                           : null,
                     ),
@@ -113,7 +114,7 @@ class _LightTileState extends State<LightTile> {
                   max: 100,
                   divisions: 20,
                   label: '${_brightness.round()}%',
-                  onChanged: light.isReachable
+                  onChanged: group.isReachable
                       ? (value) => setState(() => _dragging = value)
                       : null,
                   onChangeEnd: (value) {
@@ -129,12 +130,18 @@ class _LightTileState extends State<LightTile> {
     );
   }
 
-  static String _status(Light light) {
-    if (!light.isReachable) return 'Not responding';
-    if (!light.isOn) return 'Off';
+  static String _status(LightGroup group) {
+    if (!group.isReachable) return 'Not responding';
 
-    final temp = light.colorTempK;
-    return temp == null ? '${light.brightness}%' : '${light.brightness}% · ${temp}K';
+    // A fixture says how many bulbs it is made of, because that is the thing a person cannot
+    // tell from the outside and occasionally needs to know.
+    final prefix = group.isFixture ? '${group.lights.length} bulbs · ' : '';
+    if (!group.isOn) return '${prefix}Off';
+
+    final temp = group.colorTempK;
+    return temp == null
+        ? '$prefix${group.brightness}%'
+        : '$prefix${group.brightness}% · ${temp}K';
   }
 }
 

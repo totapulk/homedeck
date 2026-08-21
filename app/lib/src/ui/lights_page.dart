@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../api/light_feed.dart';
 import '../controller/controller_input.dart';
 import '../models/light.dart';
+import '../models/light_group.dart';
+import '../models/light_selection.dart';
 import '../state/light_store.dart';
 import 'light_tile.dart';
 
@@ -34,9 +36,20 @@ class LightsPage extends StatelessWidget {
           onRetry: store.load,
         ),
         LightsReady(:final lights) when lights.isEmpty => const _Empty(),
-        LightsReady(:final lights) => RefreshIndicator(
-          onRefresh: store.load,
-          child: _RoomList(lights: lights, selectedId: store.selected?.id),
+        LightsReady(:final lights) => Column(
+          children: [
+            _SelectionBar(
+              label: store.selectionLabel,
+              narrowed: store.selection is! AllLights,
+              onWiden: store.selectAll,
+            ),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: store.load,
+                child: _RoomList(lights: lights),
+              ),
+            ),
+          ],
         ),
       },
     );
@@ -113,39 +126,171 @@ class _RealtimeBadge extends StatelessWidget {
   }
 }
 
-class _RoomList extends StatelessWidget {
-  const _RoomList({required this.lights, this.selectedId});
+/// Names what the knob will move, and offers the way back out to everything.
+class _SelectionBar extends StatelessWidget {
+  const _SelectionBar({
+    required this.label,
+    required this.narrowed,
+    required this.onWiden,
+  });
 
-  final List<Light> lights;
-  final String? selectedId;
+  final String label;
+  final bool narrowed;
+  final VoidCallback onWiden;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 4, 12, 4),
+      child: Row(
+        children: [
+          Icon(Icons.tune, size: 16, color: scheme.primary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: 'Knob controls  ',
+                    style: TextStyle(color: scheme.onSurfaceVariant),
+                  ),
+                  TextSpan(
+                    text: label,
+                    style: TextStyle(
+                      color: scheme.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              style: Theme.of(context).textTheme.bodySmall,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (narrowed)
+            TextButton(onPressed: onWiden, child: const Text('All lights')),
+        ],
+      ),
+    );
+  }
+}
+
+class _RoomList extends StatelessWidget {
+  const _RoomList({required this.lights});
+
+  final List<Light> lights;
+
+  @override
+  Widget build(BuildContext context) {
+    final store = LightScope.of(context);
+    final selection = store.selection;
+
     final rooms = <String, List<Light>>{};
     for (final light in lights) {
       (rooms[light.room] ??= <Light>[]).add(light);
     }
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-      children: [
-        for (final MapEntry(key: room, value: roomLights) in rooms.entries) ...[
-          Padding(
-            padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
-            child: Text(
-              room.toUpperCase(),
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                letterSpacing: 1.2,
-              ),
+    // Tapping past the cards widens the selection back to everything, which is both the
+    // forgiving thing to do on a wall panel and the gesture people try first.
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: store.selectAll,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+        children: [
+          for (final MapEntry(key: room, value: roomLights) in rooms.entries) ...[
+            _RoomHeader(
+              room: room,
+              lights: roomLights,
+              selected: selection == RoomSelection(room),
+              onTap: () => store.selectRoom(room),
             ),
-          ),
-          for (final light in roomLights) ...[
-            LightTile(light: light, isSelected: light.id == selectedId),
-            const SizedBox(height: 8),
+            for (final group in groupLights(roomLights)) ...[
+              LightTile(group: group, isSelected: store.isGroupSelected(group)),
+              const SizedBox(height: 8),
+            ],
           ],
         ],
-      ],
+      ),
+    );
+  }
+}
+
+/// Selecting a room is a primary action on a wall panel, so it gets a target sized for a
+/// thumb rather than a caption sized for a mouse.
+class _RoomHeader extends StatelessWidget {
+  const _RoomHeader({
+    required this.room,
+    required this.lights,
+    required this.selected,
+    required this.onTap,
+  });
+
+  static const double _minTouchTarget = 52;
+
+  final String room;
+  final List<Light> lights;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final on = lights.where((light) => light.isOn).length;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 18, bottom: 8),
+      child: Material(
+        color: selected ? scheme.primary.withValues(alpha: 0.14) : Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            width: double.infinity,
+            constraints: const BoxConstraints(minHeight: _minTouchTarget),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        room.toUpperCase(),
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: selected ? scheme.primary : scheme.onSurface,
+                          letterSpacing: 1.2,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        on == 0
+                            ? '${lights.length} lights · all off'
+                            : '${lights.length} lights · $on on',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.tune,
+                  size: 18,
+                  color: selected
+                      ? scheme.primary
+                      : scheme.onSurfaceVariant.withValues(alpha: 0.4),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
