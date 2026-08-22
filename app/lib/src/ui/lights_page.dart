@@ -30,8 +30,6 @@ class LightsPage extends StatelessWidget {
           ),
         ],
       ),
-      // The vacuum sits outside the lights' switch: a backend that cannot find a bulb has no
-      // business hiding the robot.
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -41,28 +39,101 @@ class LightsPage extends StatelessWidget {
               narrowed: store.selection is! AllLights,
               onWiden: store.selectAll,
             ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: VacuumCard(),
-          ),
           Expanded(
-            child: switch (store.state) {
-              LightsLoading() => const Center(child: CircularProgressIndicator()),
-              LightsUnavailable(:final message) => _Unavailable(
-                message: message,
-                onRetry: store.load,
+            child: RefreshIndicator(
+              onRefresh: store.load,
+              // Tapping past the cards widens the selection back to everything, which is both
+              // the forgiving thing to do on a wall panel and the gesture people try first.
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: store.selectAll,
+                child: ListView(
+                  // Short content still has to be draggable, or pull-to-refresh only works
+                  // once there are enough lights to scroll.
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  children: [
+                    // Above the lights and inside the same scroll: the vacuum is another thing
+                    // in the flat, not a banner about one.
+                    const _SectionHeader(title: 'Cleaning'),
+                    const VacuumCard(),
+                    ..._lightsSection(store),
+                  ],
+                ),
               ),
-              LightsReady(:final lights) when lights.isEmpty => const _Empty(),
-              LightsReady(:final lights) => RefreshIndicator(
-                onRefresh: store.load,
-                child: _RoomList(lights: lights),
-              ),
-            },
+            ),
           ),
         ],
       ),
     );
   }
+}
+
+/// The lights in whatever state they are in, as list items rather than a widget of their own,
+/// so that everything above them scrolls away with them.
+List<Widget> _lightsSection(LightStore store) => switch (store.state) {
+  LightsLoading() => const [_Notice(child: CircularProgressIndicator())],
+  LightsUnavailable(:final message) => [
+    _Unavailable(message: message, onRetry: store.load),
+  ],
+  LightsReady(:final lights) when lights.isEmpty => const [_Notice(child: _Empty())],
+  LightsReady(:final lights) => _rooms(store, lights),
+};
+
+List<Widget> _rooms(LightStore store, List<Light> lights) {
+  final rooms = <String, List<Light>>{};
+  for (final light in lights) {
+    (rooms[light.room] ??= <Light>[]).add(light);
+  }
+
+  return [
+    for (final MapEntry(key: room, value: roomLights) in rooms.entries) ...[
+      _RoomHeader(
+        room: room,
+        lights: roomLights,
+        selected: store.selection == RoomSelection(room),
+        onTap: () => store.selectRoom(room),
+      ),
+      for (final group in groupLights(roomLights)) ...[
+        LightTile(group: group, isSelected: store.isGroupSelected(group)),
+        const SizedBox(height: 8),
+      ],
+    ],
+  ];
+}
+
+/// A heading for something that is not a room, styled like the room headings so the vacuum
+/// reads as a peer of the lights rather than an announcement above them.
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(14, 24, 14, 10),
+    child: Text(
+      title.toUpperCase(),
+      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+        color: Theme.of(context).colorScheme.onSurface,
+        letterSpacing: 1.2,
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+  );
+}
+
+/// Gives something that used to fill the body room to breathe inside a list instead.
+class _Notice extends StatelessWidget {
+  const _Notice({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 48),
+    child: Center(child: child),
+  );
 }
 
 /// Whether the physical knob is attached. Silent when there is no radio to speak of.
@@ -186,47 +257,6 @@ class _SelectionBar extends StatelessWidget {
   }
 }
 
-class _RoomList extends StatelessWidget {
-  const _RoomList({required this.lights});
-
-  final List<Light> lights;
-
-  @override
-  Widget build(BuildContext context) {
-    final store = LightScope.of(context);
-    final selection = store.selection;
-
-    final rooms = <String, List<Light>>{};
-    for (final light in lights) {
-      (rooms[light.room] ??= <Light>[]).add(light);
-    }
-
-    // Tapping past the cards widens the selection back to everything, which is both the
-    // forgiving thing to do on a wall panel and the gesture people try first.
-    return GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      onTap: store.selectAll,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-        children: [
-          for (final MapEntry(key: room, value: roomLights) in rooms.entries) ...[
-            _RoomHeader(
-              room: room,
-              lights: roomLights,
-              selected: selection == RoomSelection(room),
-              onTap: () => store.selectRoom(room),
-            ),
-            for (final group in groupLights(roomLights)) ...[
-              LightTile(group: group, isSelected: store.isGroupSelected(group)),
-              const SizedBox(height: 8),
-            ],
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 /// Selecting a room is a primary action on a wall panel, so it gets a target sized for a
 /// thumb rather than a caption sized for a mouse.
 class _RoomHeader extends StatelessWidget {
@@ -314,23 +344,21 @@ class _Unavailable extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
 
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.cloud_off, size: 44, color: scheme.onSurfaceVariant),
-            const SizedBox(height: 16),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 20),
-            FilledButton.tonal(onPressed: onRetry, child: const Text('Try again')),
-          ],
-        ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.cloud_off, size: 44, color: scheme.onSurfaceVariant),
+          const SizedBox(height: 16),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 20),
+          FilledButton.tonal(onPressed: onRetry, child: const Text('Try again')),
+        ],
       ),
     );
   }
@@ -340,10 +368,9 @@ class _Empty extends StatelessWidget {
   const _Empty();
 
   @override
-  Widget build(BuildContext context) => Center(
-    child: Text(
-      'No lights found on the network yet.',
-      style: Theme.of(context).textTheme.bodyMedium,
-    ),
+  Widget build(BuildContext context) => Text(
+    'No lights found on the network yet.',
+    textAlign: TextAlign.center,
+    style: Theme.of(context).textTheme.bodyMedium,
   );
 }

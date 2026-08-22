@@ -1,12 +1,12 @@
 {
-    "name": "homedeck",
-    "short_name": "homedeck",
+    "name": "HomeDeck",
+    "short_name": "HomeDeck",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#101014",
+    "theme_color": "#101014",
+    "description": "Lights and vacuum control for one flat.",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {

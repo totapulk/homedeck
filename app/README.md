@@ -14,5 +14,9 @@ flutter test
 flutter analyze
 ```
 
-The address defaults to `localhost`. That is right for the web build served next to the backend
-and wrong for a phone, which needs the machine's address on the LAN.
+A native build needs `HOMEDECK_API`; without it it looks for `localhost`, which on a phone is
+the phone. The browser build is served by the backend and asks the origin it was loaded from,
+so it needs nothing — except under `flutter run -d chrome`, where the page comes from Flutter's
+own dev server and the define is required again.
+
+Build it into the backend's static root with `../scripts/build-web.sh`.

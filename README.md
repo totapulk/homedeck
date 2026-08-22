@@ -52,6 +52,8 @@ backend/    ASP.NET Core API, WiZ light provider, SignalR hub (.NET 10)
 app/        Flutter app — Android (BLE central + UI) and web (UI only)
 firmware/   ESP32 rotary-encoder BLE peripheral (NimBLE-Arduino, PlatformIO)
 sidecar/    Small Python service, the only way to reach the vacuum
+scripts/    Build the web app into the backend's static root
+deploy/     systemd units and a deploy script for the Raspberry Pi
 ```
 
 The last three have their own READMEs: GATT contract and wiring in `firmware/knob/`, the cloud
@@ -66,8 +68,18 @@ cd app
 flutter run --dart-define=HOMEDECK_API=http://192.168.1.23:5080
 ```
 
-The backend binds every interface so a phone can reach it. `HOMEDECK_API` defaults to
-`localhost`, which is right for the web build and wrong for a phone.
+The backend binds every interface so a phone can reach it. A native build has no way to guess
+that address and must be told.
+
+The browser version needs no address, because the backend serves it:
+
+```
+scripts/build-web.sh
+```
+
+That builds into `backend/src/HomeDeck.Api/wwwroot`, after which `http://<the machine>:5080` is
+the whole UI on any device on the network. The page asks the origin it was loaded from, so
+there is nothing to configure and nothing to rebuild when the address changes.
 
 Both the knob and the vacuum are optional. Without a board, the app has an on-screen pad that
 emits identical events; without a sidecar, the backend serves a simulated robot that docks,
@@ -151,10 +163,11 @@ An IKEA Zigbee remote is the next test of the idea: it should drop in as another
 - [x] ESP32 firmware and BLE controller input — the knob dims real bulbs
 - [x] Robot vacuum: a knob press starts it, via a sidecar and the vendor's cloud
 - [x] Unit tests in CI on every pull request
-- [ ] Flutter web build served by the backend
+- [x] Flutter web build served by the backend, on one origin with the API
 - [ ] Colour temperature as a control, not only a readout
 - [ ] Scenes
-- [ ] Deploy to a Raspberry Pi and a wall-mounted tablet
+- [x] Runs on a Raspberry Pi 3 as a systemd service, deployed with one script
+- [ ] A wall-mounted tablet to open it on
 - [ ] Car battery status, if it can be done politely — there is no official API
 
 ## Notes

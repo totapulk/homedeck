@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'src/api/homedeck_api.dart';
 import 'src/api/signalr_light_feed.dart';
@@ -15,7 +16,19 @@ import 'src/ui/demo_knob.dart';
 import 'src/ui/lights_page.dart';
 import 'src/ui/theme.dart';
 
-void main() => runApp(const HomeDeckApp());
+void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // A control panel has no use for the clock and the battery meter, and on a wall it is the
+  // only thing on screen anyway. The navigation bar stays: leaving no way out of the app is a
+  // separate decision, and not one to make by accident. No effect on the web build.
+  SystemChrome.setEnabledSystemUIMode(
+    SystemUiMode.manual,
+    overlays: [SystemUiOverlay.bottom],
+  );
+
+  runApp(const HomeDeckApp());
+}
 
 class HomeDeckApp extends StatefulWidget {
   const HomeDeckApp({super.key});
