@@ -1,0 +1,32 @@
+[Unit]
+Description=HomeDeck API and web UI
+Documentation=https://github.com/totapulk/homedeck
+# The bulbs are found by UDP broadcast, so there is no point starting before the network is up.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=%DEPLOY_USER%
+WorkingDirectory=/opt/homedeck
+ExecStart=/opt/homedeck/HomeDeck.Api --urls http://0.0.0.0:80
+
+# Port 80 so the wall tablet opens http://homedeck.local with no port to remember. This grants
+# the one capability that needs, rather than running the whole thing as root.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+Restart=always
+RestartSec=5
+
+# State is in-memory and rebuilt by re-discovering the bulbs, so a restart costs one poll.
+Environment=DOTNET_EnableDiagnostics=0
+Environment=ASPNETCORE_ENVIRONMENT=Production
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/homedeck
+
+[Install]
+WantedBy=multi-user.target

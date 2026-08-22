@@ -53,6 +53,7 @@ app/        Flutter app — Android (BLE central + UI) and web (UI only)
 firmware/   ESP32 rotary-encoder BLE peripheral (NimBLE-Arduino, PlatformIO)
 sidecar/    Small Python service, the only way to reach the vacuum
 scripts/    Build the web app into the backend's static root
+deploy/     systemd units and a deploy script for the Raspberry Pi
 ```
 
 The last three have their own READMEs: GATT contract and wiring in `firmware/knob/`, the cloud
@@ -165,7 +166,8 @@ An IKEA Zigbee remote is the next test of the idea: it should drop in as another
 - [x] Flutter web build served by the backend, on one origin with the API
 - [ ] Colour temperature as a control, not only a readout
 - [ ] Scenes
-- [ ] Deploy to a Raspberry Pi and a wall-mounted tablet
+- [x] Runs on a Raspberry Pi 3 as a systemd service, deployed with one script
+- [ ] A wall-mounted tablet to open it on
 - [ ] Car battery status, if it can be done politely — there is no official API
 
 ## Notes
