@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:homedeck/src/api/homedeck_api.dart';
 import 'package:homedeck/src/state/light_store.dart';
+import 'package:homedeck/src/state/vacuum_store.dart';
 import 'package:homedeck/src/ui/lights_page.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -15,6 +16,22 @@ const String _twoRooms = '''
 ]
 ''';
 
+/// The page under both scopes it needs. The vacuum is left unloaded: these tests are about lights.
+Widget page(LightStore store) => MaterialApp(
+  home: LightScope(
+    store: store,
+    child: VacuumScope(
+      store: VacuumStore(
+        HomeDeckApi(
+          baseUrl: Uri.parse('http://backend'),
+          client: MockClient((_) async => http.Response('{}', 200)),
+        ),
+      ),
+      child: const LightsPage(),
+    ),
+  ),
+);
+
 Future<void> pumpLights(WidgetTester tester, String body) async {
   final store = LightStore(
     HomeDeckApi(
@@ -23,9 +40,7 @@ Future<void> pumpLights(WidgetTester tester, String body) async {
     ),
   );
 
-  await tester.pumpWidget(
-    MaterialApp(home: LightScope(store: store, child: const LightsPage())),
-  );
+  await tester.pumpWidget(page(store));
   await store.load();
   await tester.pumpAndSettle();
 }
@@ -62,9 +77,7 @@ void main() {
       ),
     );
 
-    await tester.pumpWidget(
-      MaterialApp(home: LightScope(store: store, child: const LightsPage())),
-    );
+    await tester.pumpWidget(page(store));
     await store.load();
     await tester.pumpAndSettle();
 
@@ -91,9 +104,7 @@ void main() {
       ),
     );
 
-    await tester.pumpWidget(
-      MaterialApp(home: LightScope(store: store, child: const LightsPage())),
-    );
+    await tester.pumpWidget(page(store));
     await store.load();
     await tester.pumpAndSettle();
 

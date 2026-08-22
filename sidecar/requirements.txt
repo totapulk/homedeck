@@ -1,0 +1,6 @@
+# What the vendored Dreame client needs. Nothing here is for the sidecar itself: the HTTP
+# server is stdlib, because three endpoints do not justify a framework.
+requests
+pycryptodome
+paho-mqtt
+python-miio

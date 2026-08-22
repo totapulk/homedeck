@@ -7,6 +7,7 @@ import '../models/light_group.dart';
 import '../models/light_selection.dart';
 import '../state/light_store.dart';
 import 'light_tile.dart';
+import 'vacuum_card.dart';
 
 class LightsPage extends StatelessWidget {
   const LightsPage({super.key});
@@ -29,29 +30,37 @@ class LightsPage extends StatelessWidget {
           ),
         ],
       ),
-      body: switch (store.state) {
-        LightsLoading() => const Center(child: CircularProgressIndicator()),
-        LightsUnavailable(:final message) => _Unavailable(
-          message: message,
-          onRetry: store.load,
-        ),
-        LightsReady(:final lights) when lights.isEmpty => const _Empty(),
-        LightsReady(:final lights) => Column(
-          children: [
+      // The vacuum sits outside the lights' switch: a backend that cannot find a bulb has no
+      // business hiding the robot.
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (store.state case LightsReady(:final lights) when lights.isNotEmpty)
             _SelectionBar(
               label: store.selectionLabel,
               narrowed: store.selection is! AllLights,
               onWiden: store.selectAll,
             ),
-            Expanded(
-              child: RefreshIndicator(
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: VacuumCard(),
+          ),
+          Expanded(
+            child: switch (store.state) {
+              LightsLoading() => const Center(child: CircularProgressIndicator()),
+              LightsUnavailable(:final message) => _Unavailable(
+                message: message,
+                onRetry: store.load,
+              ),
+              LightsReady(:final lights) when lights.isEmpty => const _Empty(),
+              LightsReady(:final lights) => RefreshIndicator(
                 onRefresh: store.load,
                 child: _RoomList(lights: lights),
               ),
-            ),
-          ],
-        ),
-      },
+            },
+          ),
+        ],
+      ),
     );
   }
 }

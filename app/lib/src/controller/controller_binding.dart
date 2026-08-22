@@ -1,48 +1,36 @@
 import 'dart:async';
 
-import '../models/light_command.dart';
-import '../state/light_store.dart';
+import 'package:flutter/foundation.dart';
+
+import 'control_target.dart';
 import 'controller_input.dart';
 
-/// What turning a particular control is for.
-///
-/// One entry so far. The second knob is deliberately unassigned: it is destined for the vacuum,
-/// and a knob that dims lights in the meantime would have to be untaught later — worse than one
-/// that politely does nothing.
-enum ControlRole { brightness }
-
-/// Gives a controller's events a meaning: which control does what, and what a turn is worth.
-///
-/// This is the layer the ESP32 knows nothing about. Pointing knob 1 at a vacuum instead of a
-/// light is a change here and nowhere else — no reflashing, and covered by tests that never
-/// touch hardware.
+/// Batches detents and routes events to whatever each control is wired to. Knows nothing about
+/// lights or vacuums — two knobs drive two unrelated parts of the house through this same class.
 class ControllerBinding {
   ControllerBinding({
     required ControllerInput input,
-    required LightStore store,
-    this.roles = const {0: ControlRole.brightness},
-    this.brightnessPerDetent = 5,
+    required this.targets,
+    this.onInteraction,
     this.settleWindow = const Duration(milliseconds: 120),
-  }) : _input = input,
-       _store = store;
+  }) : _input = input;
 
-  final Map<int, ControlRole> roles;
+  /// Control index to what it drives. A control with no entry is ignored.
+  final Map<int, ControlTarget> targets;
 
-  /// Twenty detents per revolution at 5% each: one full turn covers the whole range, which is
-  /// what a dimmer should feel like.
-  final int brightnessPerDetent;
+  /// Called for every event, including ones aimed at an unmapped control: a hand on any knob
+  /// means someone is present, which is what wakes the dimmed panel.
+  final VoidCallback? onInteraction;
 
-  /// A knob spun quickly emits detents far faster than a bulb can answer over UDP. Turns are
-  /// collected for this long and sent as one delta, so the network sees a handful of requests
-  /// instead of a hundred, and the bulb still keeps up with the hand.
+  /// A knob spun quickly emits detents far faster than a bulb can answer over UDP, so turns are
+  /// collected for this long and sent as one delta.
   final Duration settleWindow;
 
   final ControllerInput _input;
-  final LightStore _store;
 
   StreamSubscription<ControllerEvent>? _subscription;
 
-  // Per control: two knobs turned at once must not pool their detents.
+  // Per control, so two knobs turned at once do not pool their detents.
   final Map<int, int> _pendingDetents = <int, int>{};
   final Map<int, Timer> _pendingFlush = <int, Timer>{};
 
@@ -62,25 +50,22 @@ class ControllerBinding {
   }
 
   void _handle(ControllerEvent event) {
-    // Every event counts as someone being present, even one aimed at a control with no role
-    // yet: a hand on the knob should wake the panel whether or not the turn changes a light.
-    _store.noteInteraction();
+    onInteraction?.call();
 
     switch (event) {
       case Rotated(:final control, :final detents):
         _rotate(control, detents);
       case Pressed(:final control):
-        _press(control);
+        targets[control]?.press();
     }
   }
 
   void _rotate(int control, int detents) {
-    if (roles[control] != ControlRole.brightness) return;
+    if (!targets.containsKey(control)) return;
 
     _pendingDetents.update(control, (pending) => pending + detents, ifAbsent: () => detents);
 
-    // Started, not restarted: a continuous turn must still produce a command every window
-    // rather than nothing at all until the hand stops.
+    // Started, not restarted, so a continuous turn still produces a command every window.
     _pendingFlush[control] ??= Timer(settleWindow, () => _flush(control));
   }
 
@@ -90,23 +75,6 @@ class ControllerBinding {
     final detents = _pendingDetents.remove(control) ?? 0;
     if (detents == 0) return;
 
-    _store.applyToSelection(
-      LightCommand(brightnessDelta: detents * brightnessPerDetent),
-    );
-  }
-
-  /// A press toggles the whole selection together.
-  ///
-  /// If anything in it is on, the press turns everything off; otherwise it turns everything on.
-  /// Toggling each light independently would scatter a room into a half-lit mess, which is not
-  /// what a single button should ever produce.
-  void _press(int control) {
-    if (roles[control] != ControlRole.brightness) return;
-
-    final lights = _store.selectedLights;
-    if (lights.isEmpty) return;
-
-    final anyOn = lights.any((light) => light.isOn);
-    _store.applyToSelection(LightCommand(isOn: !anyOn));
+    targets[control]?.rotate(detents);
   }
 }

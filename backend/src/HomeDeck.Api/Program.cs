@@ -1,7 +1,9 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using HomeDeck.Api.Lights;
 using HomeDeck.Api.Lights.Wiz;
 using HomeDeck.Api.Realtime;
+using HomeDeck.Api.Vacuum;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,6 +13,10 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("appsettings.local.json", optional: true, reloadOnChange: true);
 
 builder.Services.AddOpenApi();
+
+// Enum names, not numbers: reordering a C# enum must not silently change what clients render.
+builder.Services.ConfigureHttpJsonOptions(o =>
+    o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.Configure<HomeDeckOptions>(builder.Configuration.GetSection("HomeDeck"));
 
 // TimeProvider is injected rather than calling DateTimeOffset.Now directly, so tests can
@@ -23,6 +29,26 @@ builder.Services.AddSingleton<ILightProvider, WizLightProvider>();
 builder.Services.AddSingleton<LightRegistry>();
 builder.Services.AddSingleton<LightService>();
 builder.Services.AddHostedService<LightPollingService>();
+
+// No sidecar configured means a simulated robot, so the app and the knob work on a machine
+// that has never seen a vacuum. See sidecar/README.md for why there is a sidecar at all.
+builder.Services.Configure<DreameOptions>(builder.Configuration.GetSection("HomeDeck:Dreame"));
+
+var sidecar = builder.Configuration["HomeDeck:Dreame:SidecarUrl"];
+if (string.IsNullOrWhiteSpace(sidecar))
+{
+    builder.Services.AddSingleton<IVacuumProvider, SimulatedVacuumProvider>();
+}
+else
+{
+    builder.Services.AddHttpClient<IVacuumProvider, DreameVacuumProvider>(client =>
+    {
+        client.BaseAddress = new Uri(sidecar.TrimEnd('/') + "/");
+
+        // A command here crosses the internet twice before the robot moves.
+        client.Timeout = TimeSpan.FromSeconds(20);
+    });
+}
 
 // Real-time push of confirmed state to every connected client.
 builder.Services.AddSignalR()
@@ -55,6 +81,7 @@ app.UseStaticFiles();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapLightEndpoints();
+app.MapVacuumEndpoints();
 app.MapHub<LightHub>("/hubs/lights");
 
 app.Run();
