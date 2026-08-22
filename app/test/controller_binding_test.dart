@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:homedeck/src/api/homedeck_api.dart';
+import 'package:homedeck/src/controller/control_target.dart';
 import 'package:homedeck/src/controller/controller_binding.dart';
 import 'package:homedeck/src/controller/controller_input.dart';
 import 'package:homedeck/src/state/light_store.dart';
@@ -49,7 +50,11 @@ knobOn([String home = _home]) async {
   await store.load();
 
   final knob = MockControllerInput();
-  ControllerBinding(input: knob, store: store, settleWindow: _window).attach();
+  ControllerBinding(
+    input: knob,
+    targets: {0: BrightnessTarget(store)},
+    settleWindow: _window,
+  ).attach();
   return (knob, store, commands);
 }
 
@@ -147,14 +152,14 @@ void main() {
     expect(commands['a1']!.single, {'brightnessDelta': 60});
   });
 
-  test('the second knob is reserved and does nothing yet', () async {
+  test('a control with nothing wired to it is ignored', () async {
     final (knob, _, commands) = await knobOn();
 
     knob.rotate(3, control: 1);
     knob.press(control: 1);
     await settle();
 
-    // It is destined for the vacuum. Dimming lights in the meantime would have to be untaught.
+    // Only control 0 has a target here; an unmapped knob must stay silent.
     expect(commands, isEmpty);
   });
 

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:homedeck/src/api/homedeck_api.dart';
+import 'package:homedeck/src/controller/control_target.dart';
 import 'package:homedeck/src/controller/controller_binding.dart';
 import 'package:homedeck/src/controller/controller_input.dart';
 import 'package:homedeck/src/models/light.dart';
@@ -70,7 +71,7 @@ knobOnHome() async {
   final knob = MockControllerInput();
   ControllerBinding(
     input: knob,
-    store: store,
+    targets: {0: BrightnessTarget(store)},
     settleWindow: const Duration(milliseconds: 20),
   ).attach();
 

@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/light.dart';
 import '../models/light_command.dart';
+import '../models/vacuum.dart';
 
 class HomeDeckApiException implements Exception {
   const HomeDeckApiException(this.message);
@@ -46,6 +47,24 @@ class HomeDeckApi {
     );
 
     return Light.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<Vacuum> fetchVacuum() async {
+    final response = await _send(() => _client.get(baseUrl.resolve('api/vacuum')));
+    return Vacuum.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  /// Starts a cleaning run. No settings go with it: suction, rooms and schedules stay whatever
+  /// the vendor's app has them set to.
+  Future<Vacuum> startVacuum() => _postVacuum('start');
+
+  Future<Vacuum> dockVacuum() => _postVacuum('dock');
+
+  Future<Vacuum> _postVacuum(String action) async {
+    final response = await _send(
+      () => _client.post(baseUrl.resolve('api/vacuum/$action')),
+    );
+    return Vacuum.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
   Future<http.Response> _send(
