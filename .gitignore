@@ -43,3 +43,7 @@ firmware/**/.vscode/
 *.swp
 .DS_Store
 Thumbs.db
+
+# --- Flutter web build, produced straight into the backend's static root ---
+backend/src/HomeDeck.Api/wwwroot/*
+!backend/src/HomeDeck.Api/wwwroot/.gitkeep
