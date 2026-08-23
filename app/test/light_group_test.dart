@@ -191,7 +191,7 @@ void main() {
       knob.rotate(1);
       await Future<void>.delayed(const Duration(milliseconds: 80));
 
-      expect(store.selectionLabel, 'All lights');
+      expect(store.selectionLabel, 'Kaikki valot');
       expect(commands.keys.toSet(), {'c1', 'c2', 'c3', 'r1'});
     });
   });

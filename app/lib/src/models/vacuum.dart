@@ -25,6 +25,9 @@ class Vacuum {
     required this.batteryPercent,
     required this.isSimulated,
     required this.updatedAt,
+    this.isReachable = true,
+    this.raw,
+    this.problem,
   });
 
   factory Vacuum.fromJson(Map<String, dynamic> json) => Vacuum(
@@ -33,6 +36,9 @@ class Vacuum {
     batteryPercent: json['batteryPercent'] as int?,
     isSimulated: json['isSimulated'] as bool? ?? false,
     updatedAt: DateTime.parse(json['updatedAt'] as String),
+    isReachable: json['isReachable'] as bool? ?? true,
+    raw: json['raw'] as String?,
+    problem: json['problem'] as String?,
   );
 
   final String name;
@@ -44,6 +50,17 @@ class Vacuum {
 
   final DateTime updatedAt;
 
+  /// False when the sidecar could not be reached at all. Distinct from a robot that answered
+  /// and had nothing to say, which looks identical without this.
+  final bool isReachable;
+
+  /// The vendor's own state name, e.g. `CHARGING_COMPLETED`. Shown as the fine print, because
+  /// it says more than five activities ever could.
+  final String? raw;
+
+  /// What went wrong, in the sidecar's words.
+  final String? problem;
+
   @override
   bool operator ==(Object other) =>
       other is Vacuum &&
@@ -51,9 +68,20 @@ class Vacuum {
       other.activity == activity &&
       other.batteryPercent == batteryPercent &&
       other.isSimulated == isSimulated &&
-      other.updatedAt == updatedAt;
+      other.updatedAt == updatedAt &&
+      other.isReachable == isReachable &&
+      other.raw == raw &&
+      other.problem == problem;
 
   @override
-  int get hashCode =>
-      Object.hash(name, activity, batteryPercent, isSimulated, updatedAt);
+  int get hashCode => Object.hash(
+    name,
+    activity,
+    batteryPercent,
+    isSimulated,
+    updatedAt,
+    isReachable,
+    raw,
+    problem,
+  );
 }

@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 
-import '../api/light_feed.dart';
-import '../controller/controller_input.dart';
 import '../models/light.dart';
 import '../models/light_group.dart';
 import '../models/light_selection.dart';
 import '../state/light_store.dart';
 import 'light_tile.dart';
-import 'vacuum_card.dart';
 
+/// The lights module: what the knob is pointed at, and every lamp grouped by room.
 class LightsPage extends StatelessWidget {
   const LightsPage({super.key});
 
@@ -16,71 +14,70 @@ class LightsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final store = LightScope.of(context);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('HomeDeck'),
-        actions: [
-          _KnobBadge(status: store.knob),
-          const SizedBox(width: 12),
-          _RealtimeBadge(status: store.realtime),
-          IconButton(
-            onPressed: store.load,
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh',
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (store.state case LightsReady(:final lights) when lights.isNotEmpty)
+          _SelectionBar(
+            label: store.selectionLabel,
+            narrowed: store.selection is! AllLights,
+            onWiden: store.selectAll,
           ),
-        ],
-      ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (store.state case LightsReady(:final lights) when lights.isNotEmpty)
-            _SelectionBar(
-              label: store.selectionLabel,
-              narrowed: store.selection is! AllLights,
-              onWiden: store.selectAll,
-            ),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: store.load,
-              // Tapping past the cards widens the selection back to everything, which is both
-              // the forgiving thing to do on a wall panel and the gesture people try first.
-              child: GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onTap: store.selectAll,
-                child: ListView(
-                  // Short content still has to be draggable, or pull-to-refresh only works
-                  // once there are enough lights to scroll.
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                  children: [
-                    // Above the lights and inside the same scroll: the vacuum is another thing
-                    // in the flat, not a banner about one.
-                    const _SectionHeader(title: 'Cleaning'),
-                    const VacuumCard(),
-                    ..._lightsSection(store),
-                  ],
-                ),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: store.load,
+            // Tapping past the cards widens the selection back to everything, which is both
+            // the forgiving thing to do on a wall panel and the gesture people try first.
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: store.selectAll,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  // Two to a row on anything but the narrowest screen: on a phone in portrait
+                  // that halves the scrolling, which is the whole point of the change.
+                  final columns = constraints.maxWidth >= 300 ? 2 : 1;
+
+                  // Density follows the width a tile actually ends up with, not the number of
+                  // columns. Two columns on a tablet are still roomy enough for a switch.
+                  final tileWidth = (constraints.maxWidth - 24 - (columns - 1) * 8) / columns;
+
+                  return ListView(
+                    // Short content still has to be draggable, or pull-to-refresh only works
+                    // once there are enough lights to scroll.
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
+                    children: _lightsSection(
+                      store,
+                      columns: columns,
+                      dense: tileWidth < 200,
+                    ),
+                  );
+                },
               ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
 /// The lights in whatever state they are in, as list items rather than a widget of their own,
 /// so that everything above them scrolls away with them.
-List<Widget> _lightsSection(LightStore store) => switch (store.state) {
+List<Widget> _lightsSection(
+  LightStore store, {
+  required int columns,
+  required bool dense,
+}) => switch (store.state) {
   LightsLoading() => const [_Notice(child: CircularProgressIndicator())],
   LightsUnavailable(:final message) => [
     _Unavailable(message: message, onRetry: store.load),
   ],
   LightsReady(:final lights) when lights.isEmpty => const [_Notice(child: _Empty())],
-  LightsReady(:final lights) => _rooms(store, lights),
+  LightsReady(:final lights) => _rooms(store, lights, columns, dense),
 };
 
-List<Widget> _rooms(LightStore store, List<Light> lights) {
+List<Widget> _rooms(LightStore store, List<Light> lights, int columns, bool dense) {
   final rooms = <String, List<Light>>{};
   for (final light in lights) {
     (rooms[light.room] ??= <Light>[]).add(light);
@@ -94,33 +91,66 @@ List<Widget> _rooms(LightStore store, List<Light> lights) {
         selected: store.selection == RoomSelection(room),
         onTap: () => store.selectRoom(room),
       ),
-      for (final group in groupLights(roomLights)) ...[
-        LightTile(group: group, isSelected: store.isGroupSelected(group)),
+      for (final row in _chunk(groupLights(roomLights), columns)) ...[
+        _TileRow(row: row, columns: columns, dense: dense, store: store),
         const SizedBox(height: 8),
       ],
     ],
   ];
 }
 
-/// A heading for something that is not a room, styled like the room headings so the vacuum
-/// reads as a peer of the lights rather than an announcement above them.
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title});
+List<List<T>> _chunk<T>(List<T> items, int size) => [
+  for (var start = 0; start < items.length; start += size)
+    items.sublist(start, (start + size).clamp(0, items.length)),
+];
 
-  final String title;
+/// One row of tiles. IntrinsicHeight so a two-bulb name wrapping onto a second line does not
+/// leave its neighbour standing on nothing.
+class _TileRow extends StatelessWidget {
+  const _TileRow({
+    required this.row,
+    required this.columns,
+    required this.dense,
+    required this.store,
+  });
+
+  final List<LightGroup> row;
+  final int columns;
+  final bool dense;
+  final LightStore store;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(14, 24, 14, 10),
-    child: Text(
-      title.toUpperCase(),
-      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-        color: Theme.of(context).colorScheme.onSurface,
-        letterSpacing: 1.2,
-        fontWeight: FontWeight.w700,
+  Widget build(BuildContext context) {
+    if (columns == 1) {
+      return LightTile(
+        group: row.first,
+        isSelected: store.isGroupSelected(row.first),
+        dense: dense,
+      );
+    }
+
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var index = 0; index < columns; index++) ...[
+            if (index > 0) const SizedBox(width: 8),
+            Expanded(
+              child: index < row.length
+                  ? LightTile(
+                      group: row[index],
+                      isSelected: store.isGroupSelected(row[index]),
+                      dense: dense,
+                    )
+                  // An odd number of lamps leaves a hole; a hole keeps the last tile the same
+                  // width as the rest, which is better than one wide card at the end.
+                  : const SizedBox.shrink(),
+            ),
+          ],
+        ],
       ),
-    ),
-  );
+    );
+  }
 }
 
 /// Gives something that used to fill the body room to breathe inside a list instead.
@@ -134,76 +164,6 @@ class _Notice extends StatelessWidget {
     padding: const EdgeInsets.symmetric(vertical: 48),
     child: Center(child: child),
   );
-}
-
-/// Whether the physical knob is attached. Silent when there is no radio to speak of.
-class _KnobBadge extends StatelessWidget {
-  const _KnobBadge({required this.status});
-
-  final ControllerStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
-    return Tooltip(
-      message: switch (status) {
-        ControllerStatus.connected => 'The knob is connected',
-        ControllerStatus.searching => 'Looking for the knob',
-        ControllerStatus.disconnected => 'No knob found',
-      },
-      child: Icon(
-        Icons.tune,
-        size: 18,
-        color: switch (status) {
-          ControllerStatus.connected => scheme.primary,
-          ControllerStatus.searching => scheme.onSurfaceVariant,
-          ControllerStatus.disconnected => scheme.onSurfaceVariant.withValues(alpha: 0.35),
-        },
-      ),
-    );
-  }
-}
-
-/// Whether what is on screen is being kept current, or is just the last thing we heard.
-class _RealtimeBadge extends StatelessWidget {
-  const _RealtimeBadge({required this.status});
-
-  final RealtimeStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final (label, colour) = switch (status) {
-      RealtimeStatus.live => ('Live', scheme.primary),
-      RealtimeStatus.connecting => ('Connecting', scheme.onSurfaceVariant),
-      RealtimeStatus.offline => ('Offline', scheme.error),
-    };
-
-    return Tooltip(
-      message: switch (status) {
-        RealtimeStatus.live => 'Changes made anywhere show up here immediately',
-        RealtimeStatus.connecting => 'Reconnecting to the backend',
-        RealtimeStatus.offline => 'Showing the last state we were told about',
-      },
-      child: Row(
-        children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(shape: BoxShape.circle, color: colour),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: Theme.of(
-              context,
-            ).textTheme.labelSmall?.copyWith(color: colour),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 /// Names what the knob will move, and offers the way back out to everything.
@@ -233,7 +193,7 @@ class _SelectionBar extends StatelessWidget {
               TextSpan(
                 children: [
                   TextSpan(
-                    text: 'Knob controls  ',
+                    text: 'Nuppi ohjaa  ',
                     style: TextStyle(color: scheme.onSurfaceVariant),
                   ),
                   TextSpan(
@@ -250,7 +210,7 @@ class _SelectionBar extends StatelessWidget {
             ),
           ),
           if (narrowed)
-            TextButton(onPressed: onWiden, child: const Text('All lights')),
+            TextButton(onPressed: onWiden, child: const Text('Kaikki valot')),
         ],
       ),
     );
@@ -309,8 +269,8 @@ class _RoomHeader extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         on == 0
-                            ? '${lights.length} lights · all off'
-                            : '${lights.length} lights · $on on',
+                            ? '${lights.length} valoa · kaikki pois'
+                            : '${lights.length} valoa · $on päällä',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: scheme.onSurfaceVariant,
                         ),
@@ -357,7 +317,7 @@ class _Unavailable extends StatelessWidget {
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 20),
-          FilledButton.tonal(onPressed: onRetry, child: const Text('Try again')),
+          FilledButton.tonal(onPressed: onRetry, child: const Text('Yritä uudelleen')),
         ],
       ),
     );
@@ -369,7 +329,7 @@ class _Empty extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Text(
-    'No lights found on the network yet.',
+    'Verkosta ei ole vielä löytynyt valoja.',
     textAlign: TextAlign.center,
     style: Theme.of(context).textTheme.bodyMedium,
   );

@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -9,11 +9,11 @@ import 'src/controller/ble_controller_input.dart';
 import 'src/controller/control_target.dart';
 import 'src/controller/controller_binding.dart';
 import 'src/controller/controller_input.dart';
+import 'src/state/fishing_store.dart';
 import 'src/state/light_store.dart';
 import 'src/state/vacuum_store.dart';
 import 'src/ui/ambient_dim.dart';
-import 'src/ui/demo_knob.dart';
-import 'src/ui/lights_page.dart';
+import 'src/ui/home_page.dart';
 import 'src/ui/theme.dart';
 
 void main() {
@@ -40,7 +40,7 @@ class HomeDeckApp extends StatefulWidget {
 class _HomeDeckAppState extends State<HomeDeckApp> {
   late final LightStore _store;
   late final VacuumStore _vacuum;
-  late final MockControllerInput _onScreenKnob;
+  late final FishingStore _fishing;
   late final List<ControllerInput> _controllers;
   late final List<ControllerBinding> _bindings;
 
@@ -58,15 +58,11 @@ class _HomeDeckAppState extends State<HomeDeckApp> {
 
     // Its own HTTP client: each store closes what it opened.
     _vacuum = VacuumStore(HomeDeckApi(baseUrl: HomeDeckConfig.apiBaseUrl))..watch();
+    _fishing = FishingStore(HomeDeckApi(baseUrl: HomeDeckConfig.apiBaseUrl))..watch();
 
-    // Two sources of the same events: the pad on screen and, where the platform has a radio,
-    // the knob on the shelf. Neither knows about the other, and the bindings do not care which
-    // one a turn came from.
-    _onScreenKnob = MockControllerInput();
-
-    // Only the radio reports its status to the UI. The pad on screen is present by definition,
-    // and letting it announce itself as "connected" would drown out the answer to the question
-    // the badge exists for: is the knob on the shelf talking to us?
+    // The radio, where the platform has one. MockControllerInput is the other implementation of
+    // this seam, but it lives in the tests now: the pipeline is proven there, and a wall panel
+    // has no use for a practice knob on screen.
     final ControllerInput? knob = kIsWeb ? null : BleControllerInput();
     knob?.status.listen(_store.reportController);
 
@@ -77,7 +73,7 @@ class _HomeDeckAppState extends State<HomeDeckApp> {
       1: VacuumTarget(_vacuum),
     };
 
-    _controllers = [_onScreenKnob, ?knob];
+    _controllers = [?knob];
     _bindings = [
       for (final controller in _controllers)
         ControllerBinding(
@@ -100,7 +96,7 @@ class _HomeDeckAppState extends State<HomeDeckApp> {
     for (final controller in _controllers) {
       controller.stop();
     }
-    _onScreenKnob.dispose();
+    _fishing.dispose();
     _vacuum.dispose();
     _store.dispose();
     super.dispose();
@@ -115,10 +111,9 @@ class _HomeDeckAppState extends State<HomeDeckApp> {
       store: _store,
       child: VacuumScope(
         store: _vacuum,
-        child: AmbientDim(
-          child: kDebugMode
-              ? DemoKnob(input: _onScreenKnob, child: const LightsPage())
-              : const LightsPage(),
+        child: FishingScope(
+          store: _fishing,
+          child: const AmbientDim(child: HomePage()),
         ),
       ),
     ),

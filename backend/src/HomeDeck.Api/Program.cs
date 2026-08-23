@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using HomeDeck.Api.Fishing;
 using HomeDeck.Api.Lights;
 using HomeDeck.Api.Lights.Wiz;
 using HomeDeck.Api.Realtime;
@@ -50,6 +51,19 @@ else
     });
 }
 
+// Kala Ukko is another of this developer's own products, reached over the internet. Its own
+// endpoint caches for ten minutes, and so does the provider: a wall panel polling harder cannot
+// learn anything the weather service has not published yet.
+builder.Services.Configure<KalaUkkoOptions>(builder.Configuration.GetSection("HomeDeck:KalaUkko"));
+builder.Services.AddHttpClient<IFishingProvider, KalaUkkoFishingProvider>(client =>
+{
+    var baseUrl = builder.Configuration["HomeDeck:KalaUkko:BaseUrl"];
+    if (!string.IsNullOrWhiteSpace(baseUrl))
+        client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
+
 // Real-time push of confirmed state to every connected client.
 builder.Services.AddSignalR()
     // Spelled out so hub payloads look exactly like the REST ones; a client should not need
@@ -82,6 +96,7 @@ app.UseStaticFiles();
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapLightEndpoints();
 app.MapVacuumEndpoints();
+app.MapFishingEndpoints();
 app.MapHub<LightHub>("/hubs/lights");
 
 app.Run();
