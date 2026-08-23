@@ -180,9 +180,4 @@ An IKEA Zigbee remote is the next test of the idea: it should drop in as another
 
 ## Notes
 
-Flutter, .NET and ESP32 BLE were all new here and much of this was written with AI assistance.
-Two things kept that honest: the tests, and reading dependencies before running them. The
-vendored Dreame client turned out to contain Google Analytics calls reporting a hash of the
-device MAC, in a function this project never reaches. It is pinned to a commit hash.
-
-A physical knob does turn out to be nicer than reaching for a phone
+Flutter, .NET and ESP32 BLE were all new here and much of this was written with heavy AI assistance.
