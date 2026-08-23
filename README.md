@@ -87,6 +87,8 @@ emits identical events from a test, so the whole path from input to intent to HT
 covered without a board attached; without a sidecar, the backend serves a simulated robot that
 docks, cleans and drains a battery on a timer.
 
+On a Raspberry Pi, `deploy/deploy.sh` does all of the above and installs it as a systemd service on port 80, so the panel opens at `http://homedeck.local` with no port to remember. The publish is self-contained: there is no .NET on the Pi to keep up to date, and the runtime cannot drift from the one the tests ran against. See `deploy/README.md`.
+
 ## Lights: WiZ over UDP
 
 Plain JSON on port **38899**, no cloud account, nothing leaves the flat.
@@ -135,7 +137,7 @@ are environment variables read by the sidecar, so they are in no file here.
 
 ## Tests
 
-100 tests in CI on every pull request, 44 backend and 56 app: the WiZ payload builder, encoder
+124 tests in CI on every pull request, 55 backend and 69 app: the WiZ payload builder, encoder
 deltas to brightness intents, reconciliation between optimistic UI and backend pushes, and the
 vacuum provider when the sidecar is unreachable. `ControllerInput` and `IVacuumProvider` have
 test implementations, so nothing needs a radio, a bulb or a cloud account.
