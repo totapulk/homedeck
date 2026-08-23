@@ -26,10 +26,11 @@ flat with their assignments editable rather than compiled in. See
              |  REST + SignalR
              v
    [ASP.NET Core backend] ---- serves the Flutter web build ----> [any browser on the LAN]
-        |            \
-        |             \  HTTP on loopback
-   UDP  |              v
- :38899 |        [Python sidecar]
+        |            \              \
+        |             \              \  HTTPS
+   UDP  |              \  loopback    v
+ :38899 |               v         [kalaukko.com]  bite forecast, FMI + SYKE
+        |         [Python sidecar]
         |               |  MQTT over TLS
         v               v
    [WiZ bulbs]   [vendor cloud] ---> [robot vacuum]
@@ -81,9 +82,10 @@ That builds into `backend/src/HomeDeck.Api/wwwroot`, after which `http://<the ma
 the whole UI on any device on the network. The page asks the origin it was loaded from, so
 there is nothing to configure and nothing to rebuild when the address changes.
 
-Both the knob and the vacuum are optional. Without a board, the app has an on-screen pad that
-emits identical events; without a sidecar, the backend serves a simulated robot that docks,
-cleans and drains a battery on a timer.
+Both the knob and the vacuum are optional. `ControllerInput` has a second implementation that
+emits identical events from a test, so the whole path from input to intent to HTTP call is
+covered without a board attached; without a sidecar, the backend serves a simulated robot that
+docks, cleans and drains a battery on a timer.
 
 ## Lights: WiZ over UDP
 
@@ -162,13 +164,17 @@ An IKEA Zigbee remote is the next test of the idea: it should drop in as another
 - [x] Flutter app: light list, grouping by room and fixture, on/off, brightness
 - [x] ESP32 firmware and BLE controller input — the knob dims real bulbs
 - [x] Robot vacuum: a knob press starts it, via a sidecar and the vendor's cloud
+- [x] Modules as tabs, on a rail down the right edge where a wall panel can spare the width
+- [x] Fishing forecast from Kala Ukko, another of this developer's own products
 - [x] Unit tests in CI on every pull request
 - [x] Flutter web build served by the backend, on one origin with the API
 - [ ] Colour temperature as a control, not only a readout
 - [ ] Scenes
 - [x] Runs on a Raspberry Pi 3 as a systemd service, deployed with one script
 - [ ] A wall-mounted tablet to open it on
-- [ ] Car battery status, if it can be done politely — there is no official API
+- [ ] Car battery and range, from the EU Data Act portal: read-only, and no fresher than the
+      last time the car was awake. Its unofficial API was closed in 2026, and a regulator is
+      now the only reason there is a way in at all.
 
 ## Notes
 

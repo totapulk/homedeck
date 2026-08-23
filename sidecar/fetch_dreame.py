@@ -34,6 +34,31 @@ INIT = '''"""Minimal package init: upstream's own pulls in the map decoder we de
 VERSION = "v2.0.0b25"
 '''
 
+# protocol.py subclasses MiIOProtocol for DreameVacuumDeviceProtocol — the *local* protocol, the
+# one the vendor switches off on cloud-paired models and which this sidecar therefore never
+# instantiates. Installing python-miio to obtain it costs cryptography, zeroconf and netifaces,
+# the last of which is an unmaintained C extension with no wheel for current Pythons. So the
+# import gets a class to find, and nothing more.
+MIIO_INIT = '''"""Not python-miio. See fetch_dreame.py for why this stands in for it."""
+'''
+
+MIIO_PROTOCOL = '''"""A stand-in for python-miio's local-protocol base class.
+
+The vendored dreame client subclasses this to speak to a robot over the local network. HomeDeck
+reaches its robot through the vendor cloud instead, because the local API is switched off on
+paired devices, so the subclass is defined and never used. Anything that does try to use it
+should say so loudly rather than fail somewhere subtler.
+"""
+
+
+class MiIOProtocol:
+    def __init__(self, *args, **kwargs):
+        raise NotImplementedError(
+            "The local MiIO protocol is not available in this sidecar: it speaks to the vendor "
+            "cloud. See sidecar/README.md."
+        )
+'''
+
 
 def main() -> int:
     with tempfile.TemporaryDirectory() as scratch:
@@ -57,6 +82,12 @@ def main() -> int:
 
         shutil.copy2(checkout / "LICENSE", VENDOR / "LICENSE")
         (VENDOR / "__init__.py").write_text(INIT, encoding="utf-8")
+
+        miio = VENDOR.parent / "miio"
+        miio.mkdir(parents=True, exist_ok=True)
+        (miio / "__init__.py").write_text(MIIO_INIT, encoding="utf-8")
+        (miio / "miioprotocol.py").write_text(MIIO_PROTOCOL, encoding="utf-8")
+        print("  miio (stand-in)")
 
     print(f"\nDone. {VENDOR} is ignored by git; rerun this after a clean checkout.")
     return 0

@@ -53,6 +53,43 @@ public class DreameVacuumProviderTests
     }
 
     [Fact]
+    public async Task A_sidecar_that_answered_unhappily_is_still_a_sidecar_that_answered()
+    {
+        var vacuum = Sidecar(HttpStatusCode.ServiceUnavailable, """{"error":"cloud timed out"}""");
+
+        var state = await vacuum.ReadAsync();
+
+        // The panel shows these two cases differently, so the distinction has to survive the
+        // trip: reaching nothing and reaching something that said no are different faults.
+        Assert.True(state.IsReachable);
+        Assert.Equal("cloud timed out", state.Problem);
+    }
+
+    [Fact]
+    public async Task A_sidecar_that_is_not_there_says_so_rather_than_looking_idle()
+    {
+        var vacuum = new DreameVacuumProvider(
+            new HttpClient(new RefusingHandler()) { BaseAddress = new Uri("http://localhost:5081/") },
+            TimeProvider.System);
+
+        var state = await vacuum.ReadAsync();
+
+        Assert.False(state.IsReachable);
+        Assert.Null(state.Problem);
+    }
+
+    [Fact]
+    public async Task The_vendors_own_state_name_is_passed_through_for_the_fine_print()
+    {
+        var vacuum = Sidecar(HttpStatusCode.OK, """
+            {"activity":"Docked","batteryPercent":100,"raw":"CHARGING_COMPLETED"}
+            """);
+
+        // Five activities are enough to render and nowhere near enough to explain.
+        Assert.Equal("CHARGING_COMPLETED", (await vacuum.ReadAsync()).Raw);
+    }
+
+    [Fact]
     public async Task A_sidecar_that_is_not_running_costs_the_vacuum_and_nothing_else()
     {
         var vacuum = new DreameVacuumProvider(

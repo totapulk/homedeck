@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../models/fishing.dart';
 import '../models/light.dart';
 import '../models/light_command.dart';
 import '../models/vacuum.dart';
@@ -65,6 +66,11 @@ class HomeDeckApi {
       () => _client.post(baseUrl.resolve('api/vacuum/$action')),
     );
     return Vacuum.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<Fishing> fetchFishing() async {
+    final response = await _send(() => _client.get(baseUrl.resolve('api/fishing')));
+    return Fishing.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
   Future<http.Response> _send(

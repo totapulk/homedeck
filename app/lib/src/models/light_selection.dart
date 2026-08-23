@@ -28,7 +28,7 @@ class AllLights extends LightSelection {
   List<Light> resolve(List<Light> lights) => lights;
 
   @override
-  String describe(List<Light> lights) => 'All lights';
+  String describe(List<Light> lights) => 'Kaikki valot';
 
   @override
   bool operator ==(Object other) => other is AllLights;
@@ -51,7 +51,7 @@ class RoomSelection extends LightSelection {
   @override
   String describe(List<Light> lights) =>
       resolve(lights).isEmpty || lights.every((light) => light.room != room)
-      ? 'All lights'
+      ? 'Kaikki valot'
       : room;
 
   @override
@@ -75,7 +75,7 @@ class FixtureSelection extends LightSelection {
 
   @override
   String describe(List<Light> lights) =>
-      lights.any((light) => light.fixture == fixture) ? fixture : 'All lights';
+      lights.any((light) => light.fixture == fixture) ? fixture : 'Kaikki valot';
 
   @override
   bool operator ==(Object other) =>
@@ -103,7 +103,7 @@ class SingleLight extends LightSelection {
     for (final light in lights) {
       if (light.id == id) return light.name;
     }
-    return 'All lights';
+    return 'Kaikki valot';
   }
 
   @override

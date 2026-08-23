@@ -9,12 +9,22 @@ import '../state/light_store.dart';
 /// Nothing here knows the difference beyond the label: a group of one behaves exactly like a
 /// group of three, so the switch, the slider and the selection have no special cases.
 class LightTile extends StatefulWidget {
-  const LightTile({super.key, required this.group, this.isSelected = false});
+  const LightTile({
+    super.key,
+    required this.group,
+    this.isSelected = false,
+    this.dense = false,
+  });
 
   final LightGroup group;
 
   /// Whether the knob would move this lamp.
   final bool isSelected;
+
+  /// Two tiles to a row. Drops the switch — at half the width there is no room for one, so the
+  /// bulb itself becomes the target, which is the thing on the card that already looks like a
+  /// lamp being on or off.
+  final bool dense;
 
   @override
   State<LightTile> createState() => _LightTileState();
@@ -57,6 +67,7 @@ class _LightTileState extends State<LightTile> {
     final active = group.isReachable && group.isOn;
 
     return Card(
+      margin: EdgeInsets.zero,
       // Every lamp the knob would move is outlined, so "what am I about to change" is answered
       // by looking rather than by remembering. With the whole home selected that is every card,
       // which is why the outline is quiet rather than loud.
@@ -72,56 +83,16 @@ class _LightTileState extends State<LightTile> {
         child: Opacity(
           opacity: group.isReachable ? 1 : 0.45,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 12, 6),
+            // Tight on purpose: a wall panel in portrait has to fit every lamp in the flat
+            // without scrolling, and the slider is the only part that needs room for a finger.
+            padding: widget.dense
+                ? const EdgeInsets.fromLTRB(10, 8, 10, 2)
+                : const EdgeInsets.fromLTRB(14, 8, 10, 2),
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
-                  children: [
-                    _Bulb(active: active, brightness: group.brightness),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            group.name,
-                            style: Theme.of(context).textTheme.titleMedium,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            _status(group),
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                  color: group.isReachable
-                                      ? scheme.onSurfaceVariant
-                                      : scheme.error,
-                                ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Switch(
-                      value: group.isOn,
-                      onChanged: group.isReachable
-                          ? (value) => _send(LightCommand(isOn: value))
-                          : null,
-                    ),
-                  ],
-                ),
-                Slider(
-                  value: _brightness.clamp(0, 100),
-                  max: 100,
-                  divisions: 20,
-                  label: '${_brightness.round()}%',
-                  onChanged: group.isReachable
-                      ? (value) => setState(() => _dragging = value)
-                      : null,
-                  onChangeEnd: (value) {
-                    _send(LightCommand(brightness: value.round()));
-                    setState(() => _dragging = null);
-                  },
-                ),
+                if (widget.dense) _denseHeader(active) else _wideHeader(active),
+                _slider(),
               ],
             ),
           ),
@@ -130,18 +101,123 @@ class _LightTileState extends State<LightTile> {
     );
   }
 
-  static String _status(LightGroup group) {
-    if (!group.isReachable) return 'Not responding';
+  Widget _wideHeader(bool active) {
+    final group = widget.group;
+    final scheme = Theme.of(context).colorScheme;
+
+    return Row(
+      children: [
+        _Bulb(active: active, brightness: group.brightness),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                group.name,
+                style: Theme.of(context).textTheme.titleSmall,
+                overflow: TextOverflow.ellipsis,
+              ),
+              Text(
+                _status(group),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: group.isReachable ? scheme.onSurfaceVariant : scheme.error,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Switch(
+          value: group.isOn,
+          onChanged: group.isReachable
+              ? (value) => _send(LightCommand(isOn: value))
+              : null,
+        ),
+      ],
+    );
+  }
+
+  Widget _denseHeader(bool active) {
+    final group = widget.group;
+    final scheme = Theme.of(context).colorScheme;
+
+    return Row(
+      children: [
+        InkWell(
+          onTap: group.isReachable
+              ? () => _send(LightCommand(isOn: !group.isOn))
+              : null,
+          customBorder: const CircleBorder(),
+          child: _Bulb(active: active, brightness: group.brightness),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                group.name,
+                style: Theme.of(context).textTheme.titleSmall,
+                overflow: TextOverflow.ellipsis,
+              ),
+              Text(
+                _status(group, dense: true),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: group.isReachable ? scheme.onSurfaceVariant : scheme.error,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// A default Slider reserves 48dp of height for a touch overlay this panel does not need;
+  /// constraining it gives that back to the list.
+  Widget _slider() {
+    final group = widget.group;
+
+    return SliderTheme(
+      data: SliderTheme.of(context).copyWith(
+        trackHeight: 4,
+        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+        overlayShape: SliderComponentShape.noOverlay,
+      ),
+      child: SizedBox(
+        height: 28,
+        child: Slider(
+          value: _brightness.clamp(0, 100),
+          max: 100,
+          divisions: 20,
+          label: '${_brightness.round()} %',
+          onChanged: group.isReachable
+              ? (value) => setState(() => _dragging = value)
+              : null,
+          onChangeEnd: (value) {
+            _send(LightCommand(brightness: value.round()));
+            setState(() => _dragging = null);
+          },
+        ),
+      ),
+    );
+  }
+
+  static String _status(LightGroup group, {bool dense = false}) {
+    if (!group.isReachable) return 'Ei vastaa';
 
     // A fixture says how many bulbs it is made of, because that is the thing a person cannot
-    // tell from the outside and occasionally needs to know.
-    final prefix = group.isFixture ? '${group.lights.length} bulbs · ' : '';
-    if (!group.isOn) return '${prefix}Off';
+    // tell from the outside and occasionally needs to know. Half a card wide it is the first
+    // thing to go, being the least urgent of the three.
+    final prefix = group.isFixture && !dense ? '${group.lights.length} lamppua · ' : '';
+    if (!group.isOn) return '${prefix}Pois';
 
     final temp = group.colorTempK;
     return temp == null
-        ? '$prefix${group.brightness}%'
-        : '$prefix${group.brightness}% · ${temp}K';
+        ? '$prefix${group.brightness} %'
+        : '$prefix${group.brightness} % · $temp K';
   }
 }
 
@@ -161,15 +237,11 @@ class _Bulb extends StatelessWidget {
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
-      width: 44,
-      height: 44,
+      width: 36,
+      height: 36,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: Color.lerp(
-          scheme.surfaceContainerHighest,
-          scheme.primary,
-          glow * 0.9,
-        ),
+        color: Color.lerp(scheme.surfaceContainerHighest, scheme.primary, glow * 0.9),
         boxShadow: active
             ? [
                 BoxShadow(
@@ -182,7 +254,7 @@ class _Bulb extends StatelessWidget {
       ),
       child: Icon(
         active ? Icons.lightbulb : Icons.lightbulb_outline,
-        size: 22,
+        size: 19,
         color: active ? const Color(0xFF2A1D06) : scheme.onSurfaceVariant,
       ),
     );

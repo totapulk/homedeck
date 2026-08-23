@@ -13,8 +13,34 @@ deploy/deploy.sh                      # tommi@homedeck.local
 deploy/deploy.sh pi@192.168.1.50      # or wherever it lives
 ```
 
-That builds the web UI, publishes self-contained for `linux-arm64`, copies the result to
-`/opt/homedeck`, installs the systemd unit and waits for `/health` to answer.
+That builds the web UI, publishes self-contained for `linux-arm64`, stages the result into
+`/opt/homedeck/incoming`, swaps it into place as `/opt/homedeck/app`, restarts the service and
+waits for `/health` to answer.
+
+**The swap is the point.** Copying over a running installation looks like it works and does not:
+`scp` truncates each file and rewrites it, so a runtime whose assemblies change underneath its
+mappings starts throwing `BadImageFormatException` from whatever it next loads. The process keeps
+answering HTTP while its background work quietly dies, which is the worst kind of broken. Moving
+a directory instead leaves the running process holding the inodes it already opened, so nothing
+changes under it until the restart.
+
+The copy runs as an ordinary user — `/opt/homedeck` belongs to the deploying account — so root is
+needed for one command, the restart. `ssh -t` gives sudo a terminal to ask on, which is the
+password you set in Raspberry Pi Imager. Once, before the first deploy:
+
+```
+ssh tommi@homedeck.local 'sudo mkdir -p /opt/homedeck && sudo chown $USER /opt/homedeck'
+```
+
+To stop being asked on every deploy, allow that one command without a password:
+
+```
+echo "$USER ALL=(root) NOPASSWD: /usr/bin/systemctl restart homedeck-api" | \
+  sudo tee /etc/sudoers.d/homedeck && sudo chmod 440 /etc/sudoers.d/homedeck
+```
+
+That grants restarting one service and nothing else, which is worth the two lines over turning
+off password prompts for everything.
 
 Self-contained means **no .NET on the Pi**: the runtime travels in the package, so it cannot
 drift from the one the code was tested against. The cost is around 130 MB per deploy, plus the

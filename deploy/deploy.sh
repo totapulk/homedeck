@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 #
-# Builds the web UI, publishes the backend for the Pi, and installs it as a systemd service.
+# Builds the web UI, publishes the backend for the Pi, and restarts it as a systemd service.
 #
 #     deploy/deploy.sh [user@host]        # default: tommi@homedeck.local
 #
-# Assumes the target can sudo without a password, which is how Raspberry Pi Imager sets up the
-# first account. The vacuum sidecar is installed separately; see README.md in this directory.
+# The vacuum sidecar is installed separately; see README.md in this directory.
 #
 set -euo pipefail
 
@@ -28,23 +27,44 @@ dotnet publish "$root/backend/src/HomeDeck.Api" \
   --output "$staging/app" \
   --nologo
 
+if ! ssh "$target" "test -w /opt/homedeck" 2>/dev/null; then
+  echo "First run on this machine. Set the directory up once:" >&2
+  echo >&2
+  echo "    ssh $target 'sudo mkdir -p /opt/homedeck && sudo chown \$USER /opt/homedeck'" >&2
+  exit 1
+fi
+
 echo "==> Copying $(du -sh "$staging/app" | cut -f1) to $target"
-ssh "$target" 'sudo systemctl stop homedeck-api 2>/dev/null || true
-               sudo mkdir -p /opt/homedeck
-               sudo chown -R "$USER" /opt/homedeck'
+ssh "$target" "rm -rf /opt/homedeck/incoming && mkdir -p /opt/homedeck/incoming"
+scp -q -r "$staging/app/." "$target:/opt/homedeck/incoming/"
 
-scp -q -r "$staging/app/." "$target:/opt/homedeck/"
-scp -q "$root/deploy/homedeck-api.service" "$target:/tmp/homedeck-api.service"
+echo "==> Swapping the release in"
+# A whole directory, never files in place. scp truncates and rewrites, and a running runtime
+# whose assemblies change underneath its mappings throws BadImageFormatException from wherever
+# it next happens to look — a process that keeps answering while quietly doing nothing. Replacing
+# the directory instead leaves the running process holding the inodes it already opened, so it is
+# untouched until the restart below.
+ssh "$target" 'set -e
+  chmod +x /opt/homedeck/incoming/HomeDeck.Api
+  rm -rf /opt/homedeck/app
+  mv /opt/homedeck/incoming /opt/homedeck/app
+  # Leftovers from the layout that kept the app in the top-level directory. The sidecar lives
+  # here too and is deployed by hand, so it is named rather than swept up with them.
+  find /opt/homedeck -mindepth 1 -maxdepth 1 ! -name app ! -name sidecar -exec rm -rf {} +'
 
-echo "==> Installing the service"
-ssh "$target" 'set -euo pipefail
-  chmod +x /opt/homedeck/HomeDeck.Api
-  sed "s/%DEPLOY_USER%/$USER/" /tmp/homedeck-api.service | \
-    sudo tee /etc/systemd/system/homedeck-api.service >/dev/null
-  rm /tmp/homedeck-api.service
-  sudo systemctl daemon-reload
-  sudo systemctl enable --now homedeck-api
-  sudo systemctl restart homedeck-api'
+if ! ssh "$target" "grep -q /opt/homedeck/app /etc/systemd/system/homedeck-api.service" 2>/dev/null; then
+  echo "==> Installing the service (sudo on the Pi will ask for your password)"
+  scp -q "$root/deploy/homedeck-api.service" "$target:/tmp/homedeck-api.service"
+  ssh -t "$target" 'set -e
+    sed "s/%DEPLOY_USER%/$USER/" /tmp/homedeck-api.service | \
+      sudo tee /etc/systemd/system/homedeck-api.service >/dev/null
+    rm /tmp/homedeck-api.service
+    sudo systemctl daemon-reload
+    sudo systemctl enable homedeck-api'
+fi
+
+echo "==> Restarting (sudo on the Pi will ask for your password)"
+ssh -t "$target" "sudo systemctl restart homedeck-api"
 
 echo "==> Waiting for it to answer"
 host="${target#*@}"

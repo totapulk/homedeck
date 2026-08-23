@@ -63,7 +63,7 @@ Future<void> settle() => Future<void>.delayed(_window * 4);
 void main() {
   test('with nothing chosen the knob moves the whole home', () async {
     final (knob, store, commands) = await knobOn();
-    expect(store.selectionLabel, 'All lights');
+    expect(store.selectionLabel, 'Kaikki valot');
 
     knob.rotate(1);
     await settle();
@@ -171,6 +171,6 @@ void main() {
     await settle();
 
     expect(commands.keys.toSet(), {'a1', 'a2', 'b1'});
-    expect(store.selectionLabel, 'All lights');
+    expect(store.selectionLabel, 'Kaikki valot');
   });
 }
