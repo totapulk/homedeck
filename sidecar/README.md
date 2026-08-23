@@ -95,3 +95,10 @@ means the request was fine and the cloud or the robot was not.
 - Only `protocol.py`, `types.py` and `exceptions.py` are fetched. The rest of the package
   contains a map decoder that needs Pillow, NumPy and a V8 JavaScript engine — none of which a
   button needs, and all of which a Raspberry Pi would rather not carry.
+- **`python-miio` is stood in for rather than installed.** `protocol.py` subclasses its
+  `MiIOProtocol` for the *local* device protocol — the one the vendor switches off on paired
+  models, and the reason this sidecar exists at all. The class is therefore defined and never
+  instantiated. Installing the real package to supply it costs `cryptography`, `zeroconf` and
+  `netifaces`, and the last is an unmaintained C extension with no wheel for current Pythons, so
+  on a Pi it simply cannot be installed. `fetch_dreame.py` writes a stand-in that raises if
+  anything ever does try to use it. Dependencies drop from 21 packages to 7.

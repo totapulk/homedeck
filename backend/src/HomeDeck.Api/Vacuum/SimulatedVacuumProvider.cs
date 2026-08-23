@@ -59,7 +59,7 @@ public sealed class SimulatedVacuumProvider(TimeProvider time) : IVacuumProvider
                 : VacuumActivity.Returning;
 
         return new VacuumState(
-            Name: "Robot vacuum",
+            Name: "Robotti-imuri",
             Activity: activity,
             BatteryPercent: Battery(activity, elapsed),
             IsSimulated: true,

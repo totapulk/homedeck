@@ -8,8 +8,8 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=%DEPLOY_USER%
-WorkingDirectory=/opt/homedeck
-ExecStart=/opt/homedeck/HomeDeck.Api --urls http://0.0.0.0:80
+WorkingDirectory=/opt/homedeck/app
+ExecStart=/opt/homedeck/app/HomeDeck.Api --urls http://0.0.0.0:80
 
 # Port 80 so the wall tablet opens http://homedeck.local with no port to remember. This grants
 # the one capability that needs, rather than running the whole thing as root.

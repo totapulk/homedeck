@@ -7,13 +7,13 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=%DEPLOY_USER%
-WorkingDirectory=/opt/homedeck-sidecar
+WorkingDirectory=/opt/homedeck/sidecar
 
 # Cloud credentials, kept out of the unit file and out of the repository. Create it with
 # mode 600; see deploy/README.md.
 EnvironmentFile=/etc/homedeck/dreame.env
 
-ExecStart=/opt/homedeck-sidecar/.venv/bin/python homedeck_dreame.py
+ExecStart=/opt/homedeck/sidecar/.venv/bin/python homedeck_dreame.py
 
 # The cloud is not always there, and a failed login should not be permanent.
 Restart=always
@@ -23,7 +23,7 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-ReadWritePaths=/opt/homedeck-sidecar
+ReadWritePaths=/opt/homedeck/sidecar
 
 [Install]
 WantedBy=multi-user.target

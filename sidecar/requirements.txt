@@ -1,6 +1,13 @@
 # What the vendored Dreame client needs. Nothing here is for the sidecar itself: the HTTP
 # server is stdlib, because three endpoints do not justify a framework.
-requests
-pycryptodome
-paho-mqtt
-python-miio
+#
+# Pinned, because unpinned is how this came to install a python-miio old enough to be missing
+# the one module it was there for — on the Raspberry Pi and not on the machine it was written on.
+requests==2.34.2
+pycryptodome==3.23.0
+paho-mqtt==2.1.0
+
+# python-miio is deliberately absent. protocol.py imports one class from it for a local protocol
+# this sidecar never uses; fetch_dreame.py writes a stand-in instead. The real package would drag
+# in cryptography, zeroconf and netifaces — the last unmaintained, and unbuildable on current
+# Pythons — to supply a base class nothing here instantiates.

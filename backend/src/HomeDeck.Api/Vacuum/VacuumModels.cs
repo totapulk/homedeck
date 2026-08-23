@@ -14,7 +14,15 @@ public sealed record VacuumState(
     VacuumActivity Activity,
     int? BatteryPercent,
     bool IsSimulated,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    /// <summary>False when the sidecar itself could not be reached, as opposed to reached and
+    /// unhappy. The difference is the whole diagnosis, so it should not be guessed at.</summary>
+    bool IsReachable = true,
+    /// <summary>The vendor's own state name. Far more specific than <see cref="Activity"/>,
+    /// which exists to be rendered rather than to be complete.</summary>
+    string? Raw = null,
+    /// <summary>What the sidecar said was wrong, in its own words.</summary>
+    string? Problem = null);
 
 /// <summary>
 /// A robot vacuum HomeDeck can reach. The seam matters here because the vendor disables the
